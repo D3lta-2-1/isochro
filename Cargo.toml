@@ -1,0 +1,13 @@
+[package]
+name = "isochro"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+specialization = []
+
+
+[dependencies]
+
+[profile.dev]
+opt-level = 1
