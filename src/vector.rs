@@ -1,6 +1,7 @@
+use core::ops::{Div, DivAssign, Mul, MulAssign};
+use static_assertions::{const_assert, const_assert_eq};
 use std::iter::zip;
 use std::ops::{Add, AddAssign, Deref, DerefMut, Index, IndexMut, Sub, SubAssign};
-use static_assertions::{const_assert, const_assert_eq};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec<const DIM: usize, T>(pub [T; DIM]);
@@ -16,10 +17,9 @@ pub struct Window2<T> {
     y: T,
 }
 
-
 impl<T> Vec2<T> {
     pub fn new(x: T, y: T) -> Self {
-        Self ([x, y])
+        Self([x, y])
     }
 }
 
@@ -33,7 +33,6 @@ impl<T> Deref for Vec2<T> {
             dst: &'a Window2<T>,
         }
 
-
         let cast = Transform2 { src: self };
         unsafe { cast.dst } //should we be concerned about this?
     }
@@ -46,6 +45,7 @@ impl<T> DerefMut for Vec2<T> {
             src: &'a mut Vec2<T>,
             dst: &'a mut Window2<T>,
         }
+
         let cast = Transform2 { src: self };
         unsafe { cast.dst } // SAFETY: repr(C) guarantees that the fields are in the same order
     }
@@ -63,7 +63,7 @@ pub struct Window3<T> {
 
 impl<T> Vec3<T> {
     pub fn new(x: T, y: T, z: T) -> Self {
-        Self ([x, y, z])
+        Self([x, y, z])
     }
 }
 
@@ -74,6 +74,7 @@ impl<T> Deref for Vec3<T> {
             src: &'a Vec3<T>,
             dst: &'a Window3<T>,
         }
+
         let cast = Transform3 { src: self };
         unsafe { cast.dst } // SAFETY: repr(C) guarantees that the fields are in the same order
     }
@@ -85,6 +86,7 @@ impl<T> DerefMut for Vec3<T> {
             src: &'a mut Vec3<T>,
             dst: &'a mut Window3<T>,
         }
+
         let cast = Transform3 { src: self };
         unsafe { cast.dst } //should we be concerned about this?
     }
@@ -117,7 +119,6 @@ impl<T, const D: usize> From<Vec<D, T>> for [T; D] {
     }
 }
 
-
 // heart of most of the operations on Vec
 // TODO: Find faster way in debug mode to merge two statics arrays
 impl<T, const D: usize> Vec<D, T> {
@@ -125,27 +126,45 @@ impl<T, const D: usize> Vec<D, T> {
         let a = self.0.into_iter();
         let b = other.0.into_iter();
         let mut iter = zip(a, b).map(|(a, b)| f(a, b));
-        Vec(std::array::from_fn(|_| unsafe { iter.next().unwrap_unchecked() }))
+
+        Vec(std::array::from_fn(|_| unsafe {
+            iter.next().unwrap_unchecked()
+        }))
+    }
+    fn combine_scalar<U: Clone, R>(self, other: U, f: impl Fn(T, U) -> R) -> Vec<D, R> {
+        Vec(self.0.map(|a| f(a, other.clone())))
     }
 
     fn combine_ref<U, R>(self, other: &Vec<D, U>, f: impl Fn(T, &U) -> R) -> Vec<D, R> {
         let a = self.0.into_iter();
         let b = other.0.iter();
         let mut iter = zip(a, b).map(|(a, b)| f(a, b));
-        Vec(std::array::from_fn(|_| unsafe { iter.next().unwrap_unchecked() }))
+
+        Vec(std::array::from_fn(|_| unsafe {
+            iter.next().unwrap_unchecked()
+        }))
     }
 
     fn combine_both_ref<U, R>(&self, other: &Vec<D, U>, f: impl Fn(&T, &U) -> R) -> Vec<D, R> {
         let a = self.0.iter();
         let b = other.0.iter();
         let mut iter = zip(a, b).map(|(a, b)| f(a, b));
-        Vec(std::array::from_fn(|_| unsafe { iter.next().unwrap_unchecked() }))
+
+        Vec(std::array::from_fn(|_| unsafe {
+            iter.next().unwrap_unchecked()
+        }))
     }
 
     fn combine_assigne<U>(&mut self, other: Vec<D, U>, f: impl Fn(&mut T, U)) {
         let mut b = other.0.into_iter();
         for a in self.0.iter_mut() {
             unsafe { f(a, b.next().unwrap_unchecked()) }
+        }
+    }
+
+    fn combine_assigne_scalar<U: Clone>(&mut self, other: U, f: impl Fn(&mut T, U)) {
+        for a in self.0.iter_mut() {
+            f(a, other.clone());
         }
     }
 
@@ -174,17 +193,17 @@ where
 {
     type Output = Vec<D, R>;
     fn add(self, rhs: &Vec<D, U>) -> Self::Output {
-        self.combine_ref(rhs, | a, b | a + b)
+        self.combine_ref(rhs, |a, b| a + b)
     }
 }
 
 impl<T, U, R, const D: usize> Add<Vec<D, U>> for &Vec<D, T>
 where
-        for<'a> &'a T: Add<U, Output = R>,
+    for<'a> &'a T: Add<U, Output = R>,
 {
     type Output = Vec<D, R>;
     fn add(self, rhs: Vec<D, U>) -> Self::Output {
-        rhs.combine_ref(self, |a, b | b + a) // swap arguments because we only have one implementation of combine_ref
+        rhs.combine_ref(self, |a, b| b + a) // swap arguments because we only have one implementation of combine_ref
     }
 }
 
@@ -194,25 +213,25 @@ where
 {
     type Output = Vec<D, R>;
     fn add(self, rhs: &Vec<D, U>) -> Self::Output {
-        self.combine_both_ref(rhs, | a, b | a + b)
+        self.combine_both_ref(rhs, |a, b| a + b)
     }
 }
 
-impl <T, U, const D: usize> AddAssign<Vec<D, U>> for Vec<D, T>
+impl<T, U, const D: usize> AddAssign<Vec<D, U>> for Vec<D, T>
 where
     T: AddAssign<U>,
 {
     fn add_assign(&mut self, rhs: Vec<D, U>) {
-        self.combine_assigne(rhs, |mut a, b | a.add_assign(b));
+        self.combine_assigne(rhs, |a, b| a.add_assign(b));
     }
 }
 
-impl <T, U, const D: usize> AddAssign<&Vec<D, U>> for Vec<D, T>
+impl<T, U, const D: usize> AddAssign<&Vec<D, U>> for Vec<D, T>
 where
     T: for<'a> AddAssign<&'a U>,
 {
     fn add_assign(&mut self, rhs: &Vec<D, U>) {
-        self.combine_assigne_ref(rhs, |a, b | a.add_assign(b));
+        self.combine_assigne_ref(rhs, |a, b| a.add_assign(b));
     }
 }
 
@@ -262,7 +281,7 @@ where
     T: SubAssign<U>,
 {
     fn sub_assign(&mut self, rhs: Vec<D, U>) {
-        self.combine_assigne(rhs, |mut a, b| a.sub_assign(b));
+        self.combine_assigne(rhs, |a, b| a.sub_assign(b));
     }
 }
 
@@ -275,19 +294,62 @@ where
     }
 }
 
+impl<T, U, R, const D: usize> Mul<U> for Vec<D, T>
+where
+    T: Mul<U, Output = R>,
+    U: Clone,
+{
+    type Output = Vec<D, R>;
+
+    fn mul(self, rhs: U) -> Self::Output {
+        self.combine_scalar(rhs, T::mul)
+    }
+}
+
+impl<T, U, const D: usize> MulAssign<U> for Vec<D, T>
+where
+    T: MulAssign<U>,
+    U: Clone,
+{
+    fn mul_assign(&mut self, rhs: U) {
+        self.combine_assigne_scalar(rhs, T::mul_assign);
+    }
+}
+
+impl<T, U, R, const D: usize> Div<U> for Vec<D, T>
+where
+    T: Div<U, Output = R>,
+    U: Clone,
+{
+    type Output = Vec<D, R>;
+
+    fn div(self, rhs: U) -> Self::Output {
+        self.combine_scalar(rhs, T::div)
+    }
+}
+
+impl<T, U, const D: usize> DivAssign<U> for Vec<D, T>
+where
+    T: DivAssign<U>,
+    U: Clone,
+{
+    fn div_assign(&mut self, rhs: U) {
+        self.combine_assigne_scalar(rhs, T::div_assign);
+    }
+}
+
 // This is two view how add is optimized by the compiler
 // you're likely looking for ``cargo asm --rust isochro::vector::add``
 pub fn add(a: Vec2<i32>, b: Vec2<i32>) -> Vec2<i32> {
     a + b
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_vec2() {
+    fn test_vec2_add() {
         let a = Vec2::new(1, 2);
         let b = Vec2::new(3, 4);
         let _ = a + b;
@@ -298,6 +360,30 @@ mod tests {
         e -= b;
         assert_eq!(c.x, 4);
         assert_eq!(c.y, 6);
+    }
+
+    #[test]
+    fn test_vec2_scalar_mul() {
+        let a = Vec2::new(1, 2);
+        let b = a * 2;
+        let mut c = Vec2::new(1, 2);
+        c *= 2;
+        assert_eq!(b.x, 2);
+        assert_eq!(b.y, 4);
+        assert_eq!(b.x, c.x);
+        assert_eq!(b.y, c.y);
+    }
+
+    #[test]
+    fn test_vec2_scalar_div() {
+        let a = Vec2::new(4, 8);
+        let b = a / 2;
+        let mut c = Vec2::new(4, 8);
+        c /= 2;
+        assert_eq!(b.x, 2);
+        assert_eq!(b.y, 4);
+        assert_eq!(b.x, c.x);
+        assert_eq!(b.y, c.y);
     }
 
     #[test]
