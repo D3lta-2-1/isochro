@@ -1,107 +1,56 @@
-use core::ops::{Div, DivAssign, Mul, MulAssign};
-use static_assertions::{const_assert, const_assert_eq};
-use std::iter::zip;
-use std::ops::{Add, AddAssign, Deref, DerefMut, Index, IndexMut, Sub, SubAssign};
+//! A generic vector type with compile-time dimensionality.
+//! This type is a wrapper around a fixed-size array, and provides
+//! a number of convenience methods for working with vectors.
+//! The dimensionality of the vector is specified as a type parameter.
+//! This allows the compiler to catch errors where vectors of different
+//! sizes are used incorrectly.
+//! # Examples
+//! ```
+//! use isochro::vector::Vec3;
+//! let a = Vec3::new(1.0, 2.0, 3.0);
+//! let b = Vec3::new(4.0, 5.0, 6.0);
+//! let c = a + b;
+//! assert_eq!(c.x, 5.0);
+//! assert_eq!(c.y, 7.0);
+//! assert_eq!(c.z, 9.0);
+//! ```
 
+mod vec2;
+mod vec3;
+mod vec4;
+
+use core::ops::{Div, DivAssign, Mul, MulAssign};
+use std::iter::zip;
+use std::ops::{Add, AddAssign, Index, IndexMut, Sub, SubAssign};
+
+pub use vec2::*;
+pub use vec3::*;
+pub use vec4::*;
+
+
+/// Like the standard std::ops::* for the dot product.
+pub trait DotProduct<Rhs = Self> {
+    type Output;
+
+    fn dot(self, other: Rhs) -> Self::Output;
+}
+
+/// A generic vector type with compile-time dimensionality.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vec<const DIM: usize, T>(pub [T; DIM]);
-
-//specialization for usual Vec
-
-// ---- 2D ---- //
-pub type Vec2<T> = Vec<2, T>;
-
-#[repr(C)]
-pub struct Window2<T> {
-    x: T,
-    y: T,
-}
-
-impl<T> Vec2<T> {
-    pub fn new(x: T, y: T) -> Self {
-        Self([x, y])
-    }
-}
-
-impl<T> Deref for Vec2<T> {
-    type Target = Window2<T>;
-
-    fn deref(&self) -> &Self::Target {
-        assert_eq!(size_of::<Vec2<T>>(), size_of::<Window2<T>>());
-        union Transform2<'a, T> {
-            src: &'a Vec2<T>,
-            dst: &'a Window2<T>,
-        }
-
-        let cast = Transform2 { src: self };
-        unsafe { cast.dst } //should we be concerned about this?
-    }
-}
-
-impl<T> DerefMut for Vec2<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        assert_eq!(size_of::<Vec2<T>>(), size_of::<Window2<T>>());
-        union Transform2<'a, T> {
-            src: &'a mut Vec2<T>,
-            dst: &'a mut Window2<T>,
-        }
-
-        let cast = Transform2 { src: self };
-        unsafe { cast.dst } // SAFETY: repr(C) guarantees that the fields are in the same order
-    }
-}
-
-// -- 3 -- //
-pub type Vec3<T> = Vec<3, T>;
-
-#[repr(C)]
-pub struct Window3<T> {
-    x: T,
-    y: T,
-    z: T,
-}
-
-impl<T> Vec3<T> {
-    pub fn new(x: T, y: T, z: T) -> Self {
-        Self([x, y, z])
-    }
-}
-
-impl<T> Deref for Vec3<T> {
-    type Target = Window3<T>;
-    fn deref(&self) -> &Self::Target {
-        union Transform3<'a, T> {
-            src: &'a Vec3<T>,
-            dst: &'a Window3<T>,
-        }
-
-        let cast = Transform3 { src: self };
-        unsafe { cast.dst } // SAFETY: repr(C) guarantees that the fields are in the same order
-    }
-}
-
-impl<T> DerefMut for Vec3<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        union Transform3<'a, T> {
-            src: &'a mut Vec3<T>,
-            dst: &'a mut Window3<T>,
-        }
-
-        let cast = Transform3 { src: self };
-        unsafe { cast.dst } //should we be concerned about this?
-    }
-}
 
 //generic case
 impl<T, const D: usize> Index<usize> for Vec<D, T> {
     type Output = T;
 
+    /// Get the value at the given index.
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
     }
 }
 
 impl<T, const D: usize> IndexMut<usize> for Vec<D, T> {
+    /// Get a mutable reference to the value at the given index.
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.0[index]
     }
@@ -122,7 +71,18 @@ impl<T, const D: usize> From<Vec<D, T>> for [T; D] {
 // heart of most of the operations on Vec
 // TODO: Find faster way in debug mode to merge two statics arrays
 impl<T, const D: usize> Vec<D, T> {
-    fn combine<U, R>(self, other: Vec<D, U>, f: impl Fn(T, U) -> R) -> Vec<D, R> {
+    /// Create a new vector from two other vectors and a combining function.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// let c = Vec2::combine(a, b, |a, b| a.min(b));
+    /// assert_eq!(c.x, 1);
+    /// assert_eq!(c.y, 2);
+    /// ```
+    pub fn combine<U, R>(self, other: Vec<D, U>, f: impl Fn(T, U) -> R) -> Vec<D, R> {
         let a = self.0.into_iter();
         let b = other.0.into_iter();
         let mut iter = zip(a, b).map(|(a, b)| f(a, b));
@@ -131,11 +91,33 @@ impl<T, const D: usize> Vec<D, T> {
             iter.next().unwrap_unchecked()
         }))
     }
-    fn combine_scalar<U: Clone, R>(self, other: U, f: impl Fn(T, U) -> R) -> Vec<D, R> {
+
+    /// Create a new vector from a scalar and a combining function.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::combine_scalar(a, 2, |a, b| a * b);
+    /// assert_eq!(b.x, 2);
+    /// assert_eq!(b.y, 4);
+    /// ```
+    pub fn combine_scalar<U: Clone, R>(self, other: U, f: impl Fn(T, U) -> R) -> Vec<D, R> {
         Vec(self.0.map(|a| f(a, other.clone())))
     }
 
-    fn combine_ref<U, R>(self, other: &Vec<D, U>, f: impl Fn(T, &U) -> R) -> Vec<D, R> {
+    /// Create a new vector from two other vectors and a combining function.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// let c = Vec2::combine_ref(a, &b, |a, b| a.min(*b)); // b is a reference
+    /// assert_eq!(c.x, 1);
+    /// assert_eq!(c.y, 2);
+    /// ```
+    pub fn combine_ref<U, R>(self, other: &Vec<D, U>, f: impl Fn(T, &U) -> R) -> Vec<D, R> {
         let a = self.0.into_iter();
         let b = other.0.iter();
         let mut iter = zip(a, b).map(|(a, b)| f(a, b));
@@ -145,7 +127,31 @@ impl<T, const D: usize> Vec<D, T> {
         }))
     }
 
-    fn combine_both_ref<U, R>(&self, other: &Vec<D, U>, f: impl Fn(&T, &U) -> R) -> Vec<D, R> {
+    /// Create a new vector from a scalar and a combining function.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::combine_scalar_ref(&a, &2, |a, b| a * *b);
+    /// assert_eq!(b.x, 2);
+    /// assert_eq!(b.y, 4);
+    /// ```
+    pub fn combine_scalar_ref<U: Copy, R>(&self, other: U, f: impl Fn(&T, U) -> R) -> Vec<D, R> {
+        Vec(self.0.each_ref().map(|a| f(a, other)))
+    }
+
+    /// Create a new vector from two other vectors and a combining function.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// let c = Vec2::combine_both_ref(&a, &b, |a, b| *a.min(b)); // a and b are references
+    /// assert_eq!(c, (1, 2));
+    /// ```
+    pub fn combine_both_ref<U, R>(&self, other: &Vec<D, U>, f: impl Fn(&T, &U) -> R) -> Vec<D, R> {
         let a = self.0.iter();
         let b = other.0.iter();
         let mut iter = zip(a, b).map(|(a, b)| f(a, b));
@@ -155,20 +161,49 @@ impl<T, const D: usize> Vec<D, T> {
         }))
     }
 
-    fn combine_assigne<U>(&mut self, other: Vec<D, U>, f: impl Fn(&mut T, U)) {
+    /// Create a new vector from two other vectors and a combining function.
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let mut a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// a.combine_assign(b, |mut a, b| *a += b);
+    /// assert_eq!(a.x, 4);
+    /// assert_eq!(a.y, 6);
+    /// ```
+    pub fn combine_assign<U>(&mut self, other: Vec<D, U>, f: impl Fn(&mut T, U)) {
         let mut b = other.0.into_iter();
         for a in self.0.iter_mut() {
             unsafe { f(a, b.next().unwrap_unchecked()) }
         }
     }
 
-    fn combine_assigne_scalar<U: Clone>(&mut self, other: U, f: impl Fn(&mut T, U)) {
+    /// Create a new vector from a scalar and a combining function.
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let mut a = Vec2::new(1, 2);
+    /// a.combine_assign_scalar(2, |a, b| *a = *a * b);
+    /// assert_eq!(a.x, 2);
+    /// assert_eq!(a.y, 4);
+    /// ```
+    pub fn combine_assign_scalar<U: Clone>(&mut self, other: U, f: impl Fn(&mut T, U)) {
         for a in self.0.iter_mut() {
             f(a, other.clone());
         }
     }
 
-    fn combine_assigne_ref<U>(&mut self, other: &Vec<D, U>, f: impl Fn(&mut T, &U)) {
+    /// Create a new vector from two other vectors and a combining function.
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let mut a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// a.combine_assign_ref(&b, |mut a, b| *a += b);
+    /// assert_eq!(a.x, 4);
+    /// assert_eq!(a.y, 6);
+    /// ```
+    pub fn combine_assign_ref<U>(&mut self, other: &Vec<D, U>, f: impl Fn(&mut T, &U)) {
         let mut b = other.0.iter();
         for a in self.0.iter_mut() {
             unsafe { f(a, b.next().unwrap_unchecked()) }
@@ -182,6 +217,17 @@ where
     T: Add<U, Output = R>,
 {
     type Output = Vec<D, R>;
+
+    /// Add two vectors together.
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// let c = a + b;
+    /// assert_eq!(c.x, 4);
+    /// assert_eq!(c.y, 6);
+    /// ```
     fn add(self, rhs: Vec<D, U>) -> Self::Output {
         self.combine(rhs, T::add)
     }
@@ -192,6 +238,18 @@ where
     T: for<'a> Add<&'a U, Output = R>,
 {
     type Output = Vec<D, R>;
+
+    /// Add two vectors together.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// let c = a + &b;
+    /// assert_eq!(c.x, 4);
+    /// assert_eq!(c.y, 6);
+    /// ```
     fn add(self, rhs: &Vec<D, U>) -> Self::Output {
         self.combine_ref(rhs, |a, b| a + b)
     }
@@ -202,6 +260,18 @@ where
     for<'a> &'a T: Add<U, Output = R>,
 {
     type Output = Vec<D, R>;
+
+    /// Add two vectors together.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// let c = &a + b;
+    /// assert_eq!(c.x, 4);
+    /// assert_eq!(c.y, 6);
+    /// ```
     fn add(self, rhs: Vec<D, U>) -> Self::Output {
         rhs.combine_ref(self, |a, b| b + a) // swap arguments because we only have one implementation of combine_ref
     }
@@ -212,6 +282,18 @@ where
     for<'a, 'b> &'a T: Add<&'b U, Output = R>,
 {
     type Output = Vec<D, R>;
+
+    /// Add two vectors together.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// let c = &a + &b;
+    /// assert_eq!(c.x, 4);
+    /// assert_eq!(c.y, 6);
+    /// ```
     fn add(self, rhs: &Vec<D, U>) -> Self::Output {
         self.combine_both_ref(rhs, |a, b| a + b)
     }
@@ -221,8 +303,19 @@ impl<T, U, const D: usize> AddAssign<Vec<D, U>> for Vec<D, T>
 where
     T: AddAssign<U>,
 {
+
+    /// Add a vectors to another.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let mut a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// a += b;
+    /// assert_eq!(a, (4, 6));
+    /// ```
     fn add_assign(&mut self, rhs: Vec<D, U>) {
-        self.combine_assigne(rhs, |a, b| a.add_assign(b));
+        self.combine_assign(rhs, |a, b| a.add_assign(b));
     }
 }
 
@@ -230,8 +323,18 @@ impl<T, U, const D: usize> AddAssign<&Vec<D, U>> for Vec<D, T>
 where
     T: for<'a> AddAssign<&'a U>,
 {
+    /// Add a vector to another.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let mut a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// a += &b;
+    /// assert_eq!(a, (4, 6));
+    /// ```
     fn add_assign(&mut self, rhs: &Vec<D, U>) {
-        self.combine_assigne_ref(rhs, |a, b| a.add_assign(b));
+        self.combine_assign_ref(rhs, |a, b| a.add_assign(b));
     }
 }
 
@@ -241,6 +344,18 @@ where
     T: Sub<U, Output = R>,
 {
     type Output = Vec<D, R>;
+
+    /// Subtract one vector from another.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// let c = a - b;
+    /// assert_eq!(c.x, -2);
+    /// assert_eq!(c.y, -2);
+    /// ```
     fn sub(self, rhs: Vec<D, U>) -> Self::Output {
         self.combine(rhs, |a, b| a - b)
     }
@@ -251,6 +366,18 @@ where
     T: for<'a> Sub<&'a U, Output = R>,
 {
     type Output = Vec<D, R>;
+
+    /// Subtract one vector from another.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// let c = a - &b;
+    /// assert_eq!(c.x, -2);
+    /// assert_eq!(c.y, -2);
+    /// ```
     fn sub(self, rhs: &Vec<D, U>) -> Self::Output {
         self.combine_ref(rhs, |a, b| a - b)
     }
@@ -261,6 +388,18 @@ where
     for<'a> &'a T: Sub<U, Output = R>,
 {
     type Output = Vec<D, R>;
+
+    /// Subtract one vector from another.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// let c = &a - b;
+    /// assert_eq!(c.x, -2);
+    /// assert_eq!(c.y, -2);
+    /// ```
     fn sub(self, rhs: Vec<D, U>) -> Self::Output {
         rhs.combine_ref(self, |a, b| b - a)
     }
@@ -271,6 +410,18 @@ where
     for<'a, 'b> &'a T: Sub<&'b U, Output = R>,
 {
     type Output = Vec<D, R>;
+
+    /// Subtract one vector from another.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// let c = &a - &b;
+    /// assert_eq!(c.x, -2);
+    /// assert_eq!(c.y, -2);
+    /// ```
     fn sub(self, rhs: &Vec<D, U>) -> Self::Output {
         self.combine_both_ref(rhs, |a, b| a - b)
     }
@@ -280,8 +431,17 @@ impl<T, U, const D: usize> SubAssign<Vec<D, U>> for Vec<D, T>
 where
     T: SubAssign<U>,
 {
+    /// Subtract a vector from another.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let mut a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// a -= b;
+    /// assert_eq!(a, (-2, -2));
     fn sub_assign(&mut self, rhs: Vec<D, U>) {
-        self.combine_assigne(rhs, |a, b| a.sub_assign(b));
+        self.combine_assign(rhs, |a, b| a.sub_assign(b));
     }
 }
 
@@ -289,11 +449,22 @@ impl<T, U, const D: usize> SubAssign<&Vec<D, U>> for Vec<D, T>
 where
     T: for<'a> SubAssign<&'a U>,
 {
+    /// Subtract a vector from another.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let mut a = Vec2::new(1, 2);
+    /// let b = Vec2::new(3, 4);
+    /// a -= &b;
+    /// assert_eq!(a, (-2, -2));
+    /// ```
     fn sub_assign(&mut self, rhs: &Vec<D, U>) {
-        self.combine_assigne_ref(rhs, |a, b| a.sub_assign(b));
+        self.combine_assign_ref(rhs, |a, b| a.sub_assign(b));
     }
 }
 
+// multiplication
 impl<T, U, R, const D: usize> Mul<U> for Vec<D, T>
 where
     T: Mul<U, Output = R>,
@@ -301,21 +472,64 @@ where
 {
     type Output = Vec<D, R>;
 
+    /// Multiply a vector by a scalar.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = a * 2;
+    /// assert_eq!(b.x, 2);
+    /// assert_eq!(b.y, 4);
+    /// ```
     fn mul(self, rhs: U) -> Self::Output {
         self.combine_scalar(rhs, T::mul)
+    }
+}
+
+impl<T, U, R, const D: usize> Mul<U> for &Vec<D, T>
+where
+    for<'a> &'a T: Mul<U, Output = R>,
+    U: Copy,
+{
+    type Output = Vec<D, R>;
+
+    /// Multiply a vector by a scalar.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(1, 2);
+    /// let b = &a * 2;
+    /// assert_eq!(b.x, 2);
+    /// assert_eq!(b.y, 4);
+    /// ```
+    fn mul(self, rhs: U) -> Self::Output {
+        self.combine_scalar_ref(rhs, |a, b| a * b)
     }
 }
 
 impl<T, U, const D: usize> MulAssign<U> for Vec<D, T>
 where
     T: MulAssign<U>,
-    U: Clone,
+    U: Copy,
 {
+    /// Multiply and assign a vector by a scalar.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let mut a = Vec2::new(1, 2);
+    /// a *= 2;
+    /// assert_eq!(a.x, 2);
+    /// assert_eq!(a.y, 4);
+    /// ```
     fn mul_assign(&mut self, rhs: U) {
-        self.combine_assigne_scalar(rhs, T::mul_assign);
+        self.combine_assign_scalar(rhs, T::mul_assign);
     }
 }
 
+// division
 impl<T, U, R, const D: usize> Div<U> for Vec<D, T>
 where
     T: Div<U, Output = R>,
@@ -323,8 +537,40 @@ where
 {
     type Output = Vec<D, R>;
 
+    /// Divide a vector by a scalar.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(2, 4);
+    /// let b = a / 2;
+    /// assert_eq!(b.x, 1);
+    /// assert_eq!(b.y, 2);
+    /// ```
     fn div(self, rhs: U) -> Self::Output {
         self.combine_scalar(rhs, T::div)
+    }
+}
+
+impl<T, U, R, const D: usize> Div<U> for &Vec<D, T>
+where
+    for<'a> &'a T: Div<U, Output = R>,
+    U: Copy,
+{
+    type Output = Vec<D, R>;
+
+    /// Divide a vector by a scalar.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let a = Vec2::new(2, 4);
+    /// let b = &a / 2;
+    /// assert_eq!(b.x, 1);
+    /// assert_eq!(b.y, 2);
+    /// ```
+    fn div(self, rhs: U) -> Self::Output {
+        self.combine_scalar_ref(rhs, |a, b| a / b)
     }
 }
 
@@ -333,15 +579,123 @@ where
     T: DivAssign<U>,
     U: Clone,
 {
+    /// Divide and assign a vector by a scalar.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::Vec2;
+    /// let mut a = Vec2::new(2, 4);
+    /// a /= 2;
+    /// assert_eq!(a.x, 1);
+    /// assert_eq!(a.y, 2);
+    /// ```
     fn div_assign(&mut self, rhs: U) {
-        self.combine_assigne_scalar(rhs, T::div_assign);
+        self.combine_assign_scalar(rhs, T::div_assign);
     }
 }
 
-// This is two view how add is optimized by the compiler
-// you're likely looking for ``cargo asm --rust isochro::vector::add``
-pub fn add(a: Vec2<i32>, b: Vec2<i32>) -> Vec2<i32> {
-    a + b
+// dot product
+impl<T, U, R, const D: usize> DotProduct<Vec<D, U>> for Vec<D, T>
+where
+    T: Mul<U, Output = R>,
+    R: Add<R, Output = R>,
+{
+    type Output = R;
+
+    /// Calculate the dot product of two vectors.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::{DotProduct, Vec3};
+    /// let a = Vec3::new(1, 2, 3);
+    /// let b = Vec3::new(4, 5, 6);
+    /// let c = a.dot(b);
+    /// assert_eq!(c, 4 + 10 + 18);
+    fn dot(self, rhs: Vec<D, U>) -> Self::Output {
+        use core::iter::Iterator;
+        let result = zip(self.0.into_iter(), rhs.0.into_iter())
+            .map(|(a, b)| a * b)
+            .reduce(|acc, x| acc + x);
+        unsafe { result.unwrap_unchecked() }
+    }
+}
+
+impl<T, U, R, const D: usize> DotProduct<&Vec<D, U>> for Vec<D, T>
+where
+    T: for<'a> Mul<&'a U, Output = R>,
+    R: Add<R, Output = R>,
+{
+    type Output = R;
+
+    /// Calculate the dot product of two vectors.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::{DotProduct, Vec3};
+    /// let a = Vec3::new(1, 2, 3);
+    /// let b = Vec3::new(4, 5, 6);
+    /// let c = a.dot(&b);
+    /// assert_eq!(c, 4 + 10 + 18);
+    /// ```
+    fn dot(self, rhs: &Vec<D, U>) -> Self::Output {
+        use core::iter::Iterator;
+        let result = zip(self.0.into_iter(), rhs.0.iter())
+            .map(|(a, b)| a * b)
+            .reduce(|acc, x| acc + x);
+        unsafe { result.unwrap_unchecked() }
+    }
+}
+
+impl<T, U, R, const D: usize> DotProduct<Vec<D, U>> for &Vec<D, T>
+where
+    for<'a> &'a T: Mul<U, Output = R>,
+    R: Add<R, Output = R>,
+{
+    type Output = R;
+
+    /// Calculate the dot product of two vectors.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::{DotProduct, Vec3};
+    /// let a = Vec3::new(1, 2, 3);
+    /// let b = Vec3::new(4, 5, 6);
+    /// let c = (&a).dot(b);
+    /// assert_eq!(c, 4 + 10 + 18);
+    /// ```
+    fn dot(self, rhs: Vec<D, U>) -> Self::Output {
+        use core::iter::Iterator;
+        let result = zip(self.0.iter(), rhs.0.into_iter())
+            .map(|(a, b)| a * b)
+            .reduce(|acc, x| acc + x);
+        unsafe { result.unwrap_unchecked() }
+    }
+}
+
+impl<T, U, R, const D: usize> DotProduct<&Vec<D, U>> for &Vec<D, T>
+where
+    for<'a> &'a T: Mul<&'a U, Output = R>,
+    R: Add<R, Output = R>,
+{
+    type Output = R;
+
+    /// Calculate the dot product of two vectors.
+    ///
+    /// # Example
+    /// ```
+    /// use isochro::vector::{DotProduct, Vec3};
+    /// let a = Vec3::new(1, 2, 3);
+    /// let b = Vec3::new(4, 5, 6);
+    /// let c = (&a).dot(&b);
+    /// assert_eq!(c, 4 + 10 + 18);
+    /// ```
+    fn dot(self, rhs: &Vec<D, U>) -> Self::Output {
+        use core::iter::Iterator;
+        let result = zip(self.0.iter(), rhs.0.iter())
+            .map(|(a, b)| a * b)
+            .reduce(|acc, x| acc + x);
+        unsafe { result.unwrap_unchecked() }
+    }
 }
 
 #[cfg(test)]
@@ -349,48 +703,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_vec2_add() {
-        let a = Vec2::new(1, 2);
-        let b = Vec2::new(3, 4);
-        let _ = a + b;
-        let _ = &a + b;
-        let c = a + &b;
-        let _d = a + &b;
-        let mut e = a;
-        e -= b;
-        assert_eq!(c.x, 4);
-        assert_eq!(c.y, 6);
-    }
-
-    #[test]
-    fn test_vec2_scalar_mul() {
-        let a = Vec2::new(1, 2);
-        let b = a * 2;
-        let mut c = Vec2::new(1, 2);
-        c *= 2;
-        assert_eq!(b.x, 2);
-        assert_eq!(b.y, 4);
-        assert_eq!(b.x, c.x);
-        assert_eq!(b.y, c.y);
-    }
-
-    #[test]
-    fn test_vec2_scalar_div() {
-        let a = Vec2::new(4, 8);
-        let b = a / 2;
-        let mut c = Vec2::new(4, 8);
-        c /= 2;
-        assert_eq!(b.x, 2);
-        assert_eq!(b.y, 4);
-        assert_eq!(b.x, c.x);
-        assert_eq!(b.y, c.y);
-    }
-
-    #[test]
     fn test_vec_access() {
-        let vec = Vec3::from([1, 2, 3]);
+        let vec = Vec4::from([1, 2, 3, 4]);
         assert_eq!(vec[0], vec.x);
         assert_eq!(vec[1], vec.y);
         assert_eq!(vec[2], vec.z);
+        assert_eq!(vec[3], vec.w);
     }
 }
