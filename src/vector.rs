@@ -19,21 +19,15 @@ mod vec2;
 mod vec3;
 mod vec4;
 
-use core::ops::{Div, DivAssign, Mul, MulAssign};
 use std::iter::zip;
-use std::ops::{Add, AddAssign, Index, IndexMut, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Sub, SubAssign};
 
 pub use vec2::*;
 pub use vec3::*;
 pub use vec4::*;
 
-
-/// Like the standard std::ops::* for the dot product.
-pub trait DotProduct<Rhs = Self> {
-    type Output;
-
-    fn dot(self, other: Rhs) -> Self::Output;
-}
+use crate::macros::forward_ref_binop;
+use crate::ops::DotProduct;
 
 /// A generic vector type with compile-time dimensionality.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -233,77 +227,17 @@ where
     }
 }
 
-impl<T, U, R, const D: usize> Add<&Vec<D, U>> for Vec<D, T>
-where
-    T: for<'a> Add<&'a U, Output = R>,
-{
-    type Output = Vec<D, R>;
-
-    /// Add two vectors together.
-    ///
-    /// # Example
-    /// ```
-    /// use isochro::vector::Vec2;
-    /// let a = Vec2::new(1, 2);
-    /// let b = Vec2::new(3, 4);
-    /// let c = a + &b;
-    /// assert_eq!(c.x, 4);
-    /// assert_eq!(c.y, 6);
-    /// ```
-    fn add(self, rhs: &Vec<D, U>) -> Self::Output {
-        self.combine_ref(rhs, |a, b| a + b)
-    }
-}
-
-impl<T, U, R, const D: usize> Add<Vec<D, U>> for &Vec<D, T>
-where
-    for<'a> &'a T: Add<U, Output = R>,
-{
-    type Output = Vec<D, R>;
-
-    /// Add two vectors together.
-    ///
-    /// # Example
-    /// ```
-    /// use isochro::vector::Vec2;
-    /// let a = Vec2::new(1, 2);
-    /// let b = Vec2::new(3, 4);
-    /// let c = &a + b;
-    /// assert_eq!(c.x, 4);
-    /// assert_eq!(c.y, 6);
-    /// ```
-    fn add(self, rhs: Vec<D, U>) -> Self::Output {
-        rhs.combine_ref(self, |a, b| b + a) // swap arguments because we only have one implementation of combine_ref
-    }
-}
-
-impl<T, U, R, const D: usize> Add<&Vec<D, U>> for &Vec<D, T>
-where
-    for<'a, 'b> &'a T: Add<&'b U, Output = R>,
-{
-    type Output = Vec<D, R>;
-
-    /// Add two vectors together.
-    ///
-    /// # Example
-    /// ```
-    /// use isochro::vector::Vec2;
-    /// let a = Vec2::new(1, 2);
-    /// let b = Vec2::new(3, 4);
-    /// let c = &a + &b;
-    /// assert_eq!(c.x, 4);
-    /// assert_eq!(c.y, 6);
-    /// ```
-    fn add(self, rhs: &Vec<D, U>) -> Self::Output {
-        self.combine_both_ref(rhs, |a, b| a + b)
-    }
+forward_ref_binop! {
+    impl<T, U, R; const D: usize> Add<Vec<D, U>>, add for Vec<D, T>
+    where
+        T: Add<U, Output = R> + Copy,
+        U: Copy,
 }
 
 impl<T, U, const D: usize> AddAssign<Vec<D, U>> for Vec<D, T>
 where
     T: AddAssign<U>,
 {
-
     /// Add a vectors to another.
     ///
     /// # Example
@@ -361,70 +295,11 @@ where
     }
 }
 
-impl<T, U, R, const D: usize> Sub<&Vec<D, U>> for Vec<D, T>
-where
-    T: for<'a> Sub<&'a U, Output = R>,
-{
-    type Output = Vec<D, R>;
-
-    /// Subtract one vector from another.
-    ///
-    /// # Example
-    /// ```
-    /// use isochro::vector::Vec2;
-    /// let a = Vec2::new(1, 2);
-    /// let b = Vec2::new(3, 4);
-    /// let c = a - &b;
-    /// assert_eq!(c.x, -2);
-    /// assert_eq!(c.y, -2);
-    /// ```
-    fn sub(self, rhs: &Vec<D, U>) -> Self::Output {
-        self.combine_ref(rhs, |a, b| a - b)
-    }
-}
-
-impl<T, U, R, const D: usize> Sub<Vec<D, U>> for &Vec<D, T>
-where
-    for<'a> &'a T: Sub<U, Output = R>,
-{
-    type Output = Vec<D, R>;
-
-    /// Subtract one vector from another.
-    ///
-    /// # Example
-    /// ```
-    /// use isochro::vector::Vec2;
-    /// let a = Vec2::new(1, 2);
-    /// let b = Vec2::new(3, 4);
-    /// let c = &a - b;
-    /// assert_eq!(c.x, -2);
-    /// assert_eq!(c.y, -2);
-    /// ```
-    fn sub(self, rhs: Vec<D, U>) -> Self::Output {
-        rhs.combine_ref(self, |a, b| b - a)
-    }
-}
-
-impl<T, U, R, const D: usize> Sub<&Vec<D, U>> for &Vec<D, T>
-where
-    for<'a, 'b> &'a T: Sub<&'b U, Output = R>,
-{
-    type Output = Vec<D, R>;
-
-    /// Subtract one vector from another.
-    ///
-    /// # Example
-    /// ```
-    /// use isochro::vector::Vec2;
-    /// let a = Vec2::new(1, 2);
-    /// let b = Vec2::new(3, 4);
-    /// let c = &a - &b;
-    /// assert_eq!(c.x, -2);
-    /// assert_eq!(c.y, -2);
-    /// ```
-    fn sub(self, rhs: &Vec<D, U>) -> Self::Output {
-        self.combine_both_ref(rhs, |a, b| a - b)
-    }
+forward_ref_binop! {
+    impl<T, U, R; const D: usize> Sub<Vec<D, U>>, sub for Vec<D, T>
+    where
+        T: Sub<U, Output = R> + Copy,
+        U: Copy,
 }
 
 impl<T, U, const D: usize> SubAssign<Vec<D, U>> for Vec<D, T>
@@ -620,82 +495,12 @@ where
     }
 }
 
-impl<T, U, R, const D: usize> DotProduct<&Vec<D, U>> for Vec<D, T>
-where
-    T: for<'a> Mul<&'a U, Output = R>,
-    R: Add<R, Output = R>,
-{
-    type Output = R;
-
-    /// Calculate the dot product of two vectors.
-    ///
-    /// # Example
-    /// ```
-    /// use isochro::vector::{DotProduct, Vec3};
-    /// let a = Vec3::new(1, 2, 3);
-    /// let b = Vec3::new(4, 5, 6);
-    /// let c = a.dot(&b);
-    /// assert_eq!(c, 4 + 10 + 18);
-    /// ```
-    fn dot(self, rhs: &Vec<D, U>) -> Self::Output {
-        use core::iter::Iterator;
-        let result = zip(self.0.into_iter(), rhs.0.iter())
-            .map(|(a, b)| a * b)
-            .reduce(|acc, x| acc + x);
-        unsafe { result.unwrap_unchecked() }
-    }
-}
-
-impl<T, U, R, const D: usize> DotProduct<Vec<D, U>> for &Vec<D, T>
-where
-    for<'a> &'a T: Mul<U, Output = R>,
-    R: Add<R, Output = R>,
-{
-    type Output = R;
-
-    /// Calculate the dot product of two vectors.
-    ///
-    /// # Example
-    /// ```
-    /// use isochro::vector::{DotProduct, Vec3};
-    /// let a = Vec3::new(1, 2, 3);
-    /// let b = Vec3::new(4, 5, 6);
-    /// let c = (&a).dot(b);
-    /// assert_eq!(c, 4 + 10 + 18);
-    /// ```
-    fn dot(self, rhs: Vec<D, U>) -> Self::Output {
-        use core::iter::Iterator;
-        let result = zip(self.0.iter(), rhs.0.into_iter())
-            .map(|(a, b)| a * b)
-            .reduce(|acc, x| acc + x);
-        unsafe { result.unwrap_unchecked() }
-    }
-}
-
-impl<T, U, R, const D: usize> DotProduct<&Vec<D, U>> for &Vec<D, T>
-where
-    for<'a> &'a T: Mul<&'a U, Output = R>,
-    R: Add<R, Output = R>,
-{
-    type Output = R;
-
-    /// Calculate the dot product of two vectors.
-    ///
-    /// # Example
-    /// ```
-    /// use isochro::vector::{DotProduct, Vec3};
-    /// let a = Vec3::new(1, 2, 3);
-    /// let b = Vec3::new(4, 5, 6);
-    /// let c = (&a).dot(&b);
-    /// assert_eq!(c, 4 + 10 + 18);
-    /// ```
-    fn dot(self, rhs: &Vec<D, U>) -> Self::Output {
-        use core::iter::Iterator;
-        let result = zip(self.0.iter(), rhs.0.iter())
-            .map(|(a, b)| a * b)
-            .reduce(|acc, x| acc + x);
-        unsafe { result.unwrap_unchecked() }
-    }
+forward_ref_binop! {
+    impl<T, U, R; const D: usize> DotProduct<Vec<D, U>>, dot for Vec<D, T>
+    where
+        T: Mul<U, Output = R> + Copy,
+        U: Copy,
+        R: Add<R, Output = R>,
 }
 
 #[cfg(test)]
