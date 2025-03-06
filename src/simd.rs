@@ -1,6 +1,8 @@
 use std::marker::PhantomData;
 use std::ops::Add;
 
+#[cfg(target_arch = "aarch64")]
+mod aarch64;
 #[cfg(target_arch = "x86_64")]
 mod x86_64;
 
@@ -31,9 +33,12 @@ where
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Self(<LaneCount<T, N> as SupportedNativeSimd<T, N>>::add(
-            self.0, rhs.0,
-        ))
+        // TODO: add safety guaranty
+        Self(unsafe {
+            <LaneCount<T, N> as SupportedNativeSimd<T, N>>::add(
+                self.0, rhs.0,
+            )
+        })
     }
 }
 
@@ -48,21 +53,20 @@ pub(crate) trait SupportedNativeSimd<T, const N: usize>: Sized {
     ///
     /// # Safety
     ///
-    /// Reading `ptr` must be safe, as if by `<*const [T; N]>::read`.
-    unsafe fn load(ptr: *const [T; N]) -> Self::RelativeSimdType;
+    /// Reading `ptr` must be safe, as if by [`std::ptr::read`].
+    unsafe fn load(ptr: *const [T; N]) -> Self::RelativeSimdType {
+        // The safety of reading `ptr` is ensured by the caller.
+        unsafe { *ptr.cast() }
+    }
 
-    fn add(lhs: Self::RelativeSimdType, rhs: Self::RelativeSimdType) -> Self::RelativeSimdType;
+    unsafe fn add(lhs: Self::RelativeSimdType, rhs: Self::RelativeSimdType) -> Self::RelativeSimdType;
 }
 
 impl SupportedNativeSimd<f32, 1> for LaneCount<f32, 1> {
     type RelativeSimdType = f32;
 
-    unsafe fn load(ptr: *const [f32; 1]) -> Self::RelativeSimdType {
-        unsafe { *ptr.cast() }
-    }
-
-    #[inline(always)]
-    fn add(lhs: f32, rhs: f32) -> f32 {
+    #[inline]
+    unsafe fn add(lhs: f32, rhs: f32) -> f32 {
         lhs + rhs
     }
 }

@@ -1,5 +1,5 @@
 use std::arch::x86_64::*;
-use std::mem::{MaybeUninit, transmute};
+use std::mem::transmute;
 
 use super::{LaneCount, SupportedNativeSimd};
 
@@ -15,19 +15,7 @@ impl SupportedNativeSimd<f32, 2> for LaneCount<f32, 2> {
     type RelativeSimdType = __m64;
 
     #[inline]
-    unsafe fn load(ptr: *const [f32; 2]) -> Self::RelativeSimdType {
-        let mut tmp = MaybeUninit::<Self::RelativeSimdType>::uninit();
-
-        // SAFETY: `__m64` always contains 2 elements of type `f32`.
-        // The safety of reading `ptr` is ensured by the caller.
-        unsafe {
-            core::ptr::copy_nonoverlapping(ptr, tmp.as_mut_ptr().cast(), 1);
-            tmp.assume_init()
-        }
-    }
-
-    #[inline(always)]
-    fn add(lhs: __m64, rhs: __m64) -> __m64 {
+    unsafe fn add(lhs: __m64, rhs: __m64) -> __m64 {
         // SAFETY: we build a `__m128` vector via `_mm_set_ps` and `__m64` is a
         // vector correctly defined.
         unsafe {
@@ -53,9 +41,9 @@ impl SupportedNativeSimd<f32, 4> for LaneCount<f32, 4> {
         unsafe { _mm_load_ps(ptr.cast()) }
     }
 
-    #[inline(always)]
-    fn add(lhs: __m128, rhs: __m128) -> __m128 {
-        // Safety: lhs and rhs are vectors
+    #[inline]
+    unsafe fn add(lhs: __m128, rhs: __m128) -> __m128 {
+        // SAFETY: lhs and rhs are vectors
         unsafe { _mm_add_ps(lhs, rhs) }
     }
 }
@@ -69,9 +57,9 @@ impl SupportedNativeSimd<f32, 8> for LaneCount<f32, 8> {
         unsafe { _mm256_load_ps(ptr.cast()) }
     }
 
-    #[inline(always)]
-    fn add(lhs: __m256, rhs: __m256) -> __m256 {
-        // Safety: lhs and rhs are vectors
+    #[inline]
+    unsafe fn add(lhs: __m256, rhs: __m256) -> __m256 {
+        // SAFETY: lhs and rhs are vectors
         unsafe { _mm256_add_ps(lhs, rhs) }
     }
 }
@@ -81,7 +69,7 @@ impl SupportedNativeSimd<f32, 8> for LaneCount<f32, 8> {
 // impl SupportedNativeSimd<f32, 16> for LaneCount<f32, 16> {
 //     type RelativeSimdType = __m512;
 
-//     fn add(lhs: __m512, rhs: __m512) -> __m512 {
+//     unsafe fn add(lhs: __m512, rhs: __m512) -> __m512 {
 //         unsafe {
 //             _mm512_add_ps(lhs, rhs)
 //         }
