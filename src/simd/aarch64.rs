@@ -1,25 +1,16 @@
 use std::arch::aarch64::*;
 
+use super::macros::generate_simd_support;
 use super::{LaneCount, SupportedNativeSimd};
 
-impl SupportedNativeSimd<f32, 2> for LaneCount<f32, 2> {
-    type RelativeSimdType = float32x2_t;
-
-    #[inline]
-    unsafe fn add(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
-        // SAFETY: lhs and rhs are vectors
-        unsafe { vadd_f32(lhs, rhs) }
-    }
+generate_simd_support! {
+    for [2 x f32] use float32x2_t,
+    fn add(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t = vadd_f32,
 }
 
-impl SupportedNativeSimd<f32, 4> for LaneCount<f32, 4> {
-    type RelativeSimdType = float32x4_t;
-
-    #[inline]
-    unsafe fn add(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
-        // SAFETY: lhs and rhs are vectors
-        unsafe { vaddq_f32(lhs, rhs) }
-    }
+generate_simd_support! {
+    for [4 x f32] use float32x4_t,
+    fn add(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t = vaddq_f32,
 }
 
 impl SupportedNativeSimd<f32, 8> for LaneCount<f32, 8> {

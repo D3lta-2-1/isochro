@@ -1,10 +1,14 @@
 use std::marker::PhantomData;
+use std::mem::MaybeUninit;
 use std::ops::Add;
+use std::ptr::{addr_of_mut, copy_nonoverlapping};
 
 #[cfg(target_arch = "aarch64")]
 mod aarch64;
 #[cfg(target_arch = "x86_64")]
 mod x86_64;
+
+mod macros;
 
 #[allow(private_bounds)]
 #[derive(Copy, Clone)]
@@ -32,6 +36,7 @@ where
 {
     type Output = Self;
 
+    #[inline]
     fn add(self, rhs: Self) -> Self::Output {
         // TODO: add safety guaranty
         Self(unsafe {
@@ -53,10 +58,20 @@ pub(crate) trait SupportedNativeSimd<T, const N: usize>: Sized {
     ///
     /// # Safety
     ///
-    /// Reading `ptr` must be safe, as if by [`std::ptr::read`].
-    unsafe fn load(ptr: *const [T; N]) -> Self::RelativeSimdType {
-        // The safety of reading `ptr` is ensured by the caller.
-        unsafe { *ptr.cast() }
+    /// Reading `mem_addr` must be safe, as if by [`std::ptr::read`].
+    unsafe fn load(mem_addr: *const [T; N]) -> Self::RelativeSimdType {
+        // SAFETY: create a empty destination correctly aligned (like, for __m256
+        // that require a alignement of 32)
+        let mut dst: Self::RelativeSimdType = unsafe { MaybeUninit::zeroed().assume_init() };
+        // SAFETY: the safety contract for `load` must be upheld by the caller
+        unsafe {
+            copy_nonoverlapping(
+                mem_addr as *const u8,
+                addr_of_mut!(dst) as *mut u8,
+                size_of::<Self::RelativeSimdType>(),
+            );
+        }
+        dst
     }
 
     unsafe fn add(lhs: Self::RelativeSimdType, rhs: Self::RelativeSimdType) -> Self::RelativeSimdType;
