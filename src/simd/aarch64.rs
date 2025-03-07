@@ -1,30 +1,50 @@
 use std::arch::aarch64::*;
 
 use super::macros::generate_simd_support;
-use super::{LaneCount, SupportedNativeSimd};
+use super::ArithmeticSimdMathOperation;
 
 generate_simd_support! {
     for [2 x f32] use float32x2_t,
-    fn add(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t = vadd_f32,
+    impl trait ArithmeticSimdMathOperation {
+        unsafe fn add(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t = vadd_f32,
+        unsafe fn sub(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t = vsub_f32,
+        unsafe fn mul(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t = vmul_f32,
+    }
 }
 
 generate_simd_support! {
     for [4 x f32] use float32x4_t,
-    fn add(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t = vaddq_f32,
+    impl trait ArithmeticSimdMathOperation {
+        unsafe fn add(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t = vaddq_f32,
+        unsafe fn sub(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t = vsubq_f32,
+        unsafe fn mul(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t = vmulq_f32,
+    }
 }
 
-impl SupportedNativeSimd<f32, 8> for LaneCount<f32, 8> {
-    // due to the inexistance of float32x8_t, we store it in a float32x4x2_t
-    // (it's a storage only type, not a simd type)
-    type RelativeSimdType = float32x4x2_t;
+#[inline]
+unsafe fn vaddqx2_f32(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t {
+    #[allow(unsafe_op_in_unsafe_fn)]
+    float32x4x2_t(vaddq_f32(lhs.0, rhs.0), vaddq_f32(lhs.1, rhs.1))
+}
 
-    #[inline]
-    unsafe fn add(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t {
-        // SAFETY: lhs and rhs are vectors
-        unsafe { float32x4x2_t(
-            vaddq_f32(lhs.0, rhs.0),
-            vaddq_f32(lhs.1, rhs.1),
-        ) }
+#[inline]
+unsafe fn vsubqx2_f32(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t {
+    #[allow(unsafe_op_in_unsafe_fn)]
+    float32x4x2_t(vsubq_f32(lhs.0, rhs.0), vsubq_f32(lhs.1, rhs.1))
+}
+
+#[inline]
+unsafe fn vmulqx2_f32(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t {
+    #[allow(unsafe_op_in_unsafe_fn)]
+    float32x4x2_t(vmulq_f32(lhs.0, rhs.0), vmulq_f32(lhs.1, rhs.1))
+}
+
+generate_simd_support! {
+    for [8 x f32] use float32x4x2_t,
+    impl trait ArithmeticSimdMathOperation {
+        unsafe fn add(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t = vaddqx2_f32,
+        unsafe fn sub(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t = vsubqx2_f32,
+        unsafe fn mul(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t = vmulqx2_f32,
     }
 }
 

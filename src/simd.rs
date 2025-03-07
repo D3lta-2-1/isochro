@@ -1,7 +1,9 @@
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
-use std::ops::Add;
+use std::ops::{Add, Mul, Sub};
 use std::ptr::{addr_of_mut, copy_nonoverlapping};
+
+use macros::generate_simd_support;
 
 #[cfg(target_arch = "aarch64")]
 mod aarch64;
@@ -32,18 +34,40 @@ where
 
 impl<T, const N: usize> Add for Simd<T, N>
 where
-    LaneCount<T, N>: SupportedNativeSimd<T, N>,
+    LaneCount<T, N>: ArithmeticSimdMathOperation<T, N>,
 {
     type Output = Self;
 
     #[inline]
     fn add(self, rhs: Self) -> Self::Output {
         // TODO: add safety guaranty
-        Self(unsafe {
-            <LaneCount<T, N> as SupportedNativeSimd<T, N>>::add(
-                self.0, rhs.0,
-            )
-        })
+        Self(unsafe { <LaneCount<T, N> as ArithmeticSimdMathOperation<T, N>>::add(self.0, rhs.0) })
+    }
+}
+
+impl<T, const N: usize> Sub for Simd<T, N>
+where
+    LaneCount<T, N>: ArithmeticSimdMathOperation<T, N>,
+{
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: Self) -> Self::Output {
+        // TODO: add safety guaranty
+        Self(unsafe { <LaneCount<T, N> as ArithmeticSimdMathOperation<T, N>>::sub(self.0, rhs.0) })
+    }
+}
+
+impl<T, const N: usize> Mul for Simd<T, N>
+where
+    LaneCount<T, N>: ArithmeticSimdMathOperation<T, N>,
+{
+    type Output = Self;
+
+    #[inline]
+    fn mul(self, rhs: Self) -> Self::Output {
+        // TODO: add safety guaranty
+        Self(unsafe { <LaneCount<T, N> as ArithmeticSimdMathOperation<T, N>>::mul(self.0, rhs.0) })
     }
 }
 
@@ -73,15 +97,30 @@ pub(crate) trait SupportedNativeSimd<T, const N: usize>: Sized {
         }
         dst
     }
-
-    unsafe fn add(lhs: Self::RelativeSimdType, rhs: Self::RelativeSimdType) -> Self::RelativeSimdType;
 }
 
-impl SupportedNativeSimd<f32, 1> for LaneCount<f32, 1> {
-    type RelativeSimdType = f32;
+pub(crate) trait ArithmeticSimdMathOperation<T, const N: usize>:
+    SupportedNativeSimd<T, N>
+{
+    unsafe fn add(
+        lhs: Self::RelativeSimdType,
+        rhs: Self::RelativeSimdType,
+    ) -> Self::RelativeSimdType;
+    unsafe fn sub(
+        lhs: Self::RelativeSimdType,
+        rhs: Self::RelativeSimdType,
+    ) -> Self::RelativeSimdType;
+    unsafe fn mul(
+        lhs: Self::RelativeSimdType,
+        rhs: Self::RelativeSimdType,
+    ) -> Self::RelativeSimdType;
+}
 
-    #[inline]
-    unsafe fn add(lhs: f32, rhs: f32) -> f32 {
-        lhs + rhs
+generate_simd_support! {
+    for [1 x f32] use f32,
+    impl trait ArithmeticSimdMathOperation {
+        unsafe fn add(lhs: f32, rhs: f32) -> f32 = Add::add,
+        unsafe fn sub(lhs: f32, rhs: f32) -> f32 = Sub::sub,
+        unsafe fn mul(lhs: f32, rhs: f32) -> f32 = Mul::mul,
     }
 }

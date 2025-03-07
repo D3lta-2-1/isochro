@@ -1,33 +1,53 @@
 use std::arch::x86_64::*;
 
 use super::macros::generate_simd_support;
-use super::{LaneCount, SupportedNativeSimd};
+use super::ArithmeticSimdMathOperation;
 
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone)]
 #[repr(align(8))]
 pub(crate) struct __m64([f32; 2]);
 
-impl SupportedNativeSimd<f32, 2> for LaneCount<f32, 2> {
-    type RelativeSimdType = __m64;
+#[inline]
+unsafe fn _mm64_add_ps(lhs: __m64, rhs: __m64) -> __m64 {
+    __m64([lhs.0[0] + rhs.0[0], lhs.0[1] + rhs.0[1]])
+}
 
-    #[inline]
-    unsafe fn add(lhs: __m64, rhs: __m64) -> __m64 {
-        __m64([
-            lhs.0[0] + rhs.0[0],
-            lhs.0[1] + rhs.0[1],
-        ])
+#[inline]
+unsafe fn _mm64_sub_ps(lhs: __m64, rhs: __m64) -> __m64 {
+    __m64([lhs.0[0] - rhs.0[0], lhs.0[1] - rhs.0[1]])
+}
+
+#[inline]
+unsafe fn _mm64_mul_ps(lhs: __m64, rhs: __m64) -> __m64 {
+    __m64([lhs.0[0] * rhs.0[0], lhs.0[1] * rhs.0[1]])
+}
+
+generate_simd_support! {
+    for [2 x f32] use __m64,
+    impl trait ArithmeticSimdMathOperation {
+        unsafe fn add(lhs: __m64, rhs: __m64) -> __m64 = _mm64_add_ps,
+        unsafe fn sub(lhs: __m64, rhs: __m64) -> __m64 = _mm64_sub_ps,
+        unsafe fn mul(lhs: __m64, rhs: __m64) -> __m64 = _mm64_mul_ps,
     }
 }
 
 generate_simd_support! {
     for [4 x f32] use __m128,
-    fn add(lhs: __m128, rhs: __m128) -> __m128 = _mm_add_ps,
+    impl trait ArithmeticSimdMathOperation {
+        unsafe fn add(lhs: __m128, rhs: __m128) -> __m128 = _mm_add_ps,
+        unsafe fn sub(lhs: __m128, rhs: __m128) -> __m128 = _mm_sub_ps,
+        unsafe fn mul(lhs: __m128, rhs: __m128) -> __m128 = _mm_mul_ps,
+    }
 }
 
 generate_simd_support! {
     for [8 x f32] use __m256,
-    fn add(lhs: __m256, rhs: __m256) -> __m256 = _mm256_add_ps,
+    impl trait ArithmeticSimdMathOperation {
+        unsafe fn add(lhs: __m256, rhs: __m256) -> __m256 = _mm256_add_ps,
+        unsafe fn sub(lhs: __m256, rhs: __m256) -> __m256 = _mm256_sub_ps,
+        unsafe fn mul(lhs: __m256, rhs: __m256) -> __m256 = _mm256_mul_ps,
+    }
 }
 
 // TODO: add a way to use `_mm512_add_ps` (it's instable)
