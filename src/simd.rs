@@ -116,11 +116,21 @@ pub(crate) trait ArithmeticSimdMathOperation<T, const N: usize>:
     ) -> Self::RelativeSimdType;
 }
 
-generate_simd_support! {
-    for [1 x f32] use f32,
-    impl trait ArithmeticSimdMathOperation {
-        unsafe fn add(lhs: f32, rhs: f32) -> f32 = Add::add,
-        unsafe fn sub(lhs: f32, rhs: f32) -> f32 = Sub::sub,
-        unsafe fn mul(lhs: f32, rhs: f32) -> f32 = Mul::mul,
-    }
+macro_rules! gen_single {
+    ($($t:ty),* $(,)?) => {
+        $(generate_simd_support! {
+            for [1 x $t] use $t,
+            impl trait ArithmeticSimdMathOperation {
+                unsafe fn add(lhs: $t, rhs: $t) -> $t = Add::add,
+                unsafe fn sub(lhs: $t, rhs: $t) -> $t = Sub::sub,
+                unsafe fn mul(lhs: $t, rhs: $t) -> $t = Mul::mul,
+            }
+        })*
+    };
+}
+
+gen_single! {
+    i32,
+    u32,
+    f32,
 }
