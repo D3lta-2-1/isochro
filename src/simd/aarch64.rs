@@ -17,7 +17,6 @@ generate_simd_support! {
                 vadd_s32,
                 vsub_s32,
                 vcgt_s32,
-                vclt_s32,
                 vmask_u32,
             ) }
         }
@@ -35,7 +34,6 @@ generate_simd_support! {
                 vadd_s32,
                 vsub_s32,
                 vcgt_s32,
-                vclt_s32,
                 vmask_u32,
             ) }
         }
@@ -57,7 +55,6 @@ generate_simd_support! {
                 vshr_n_s32,
                 vshl_n_s32,
                 vcgt_s32,
-                vclt_s32,
                 vmask_s32,
                 vmask_u32,
             ) }
@@ -119,7 +116,6 @@ generate_simd_support! {
                 vshr_n_u32,
                 vshl_n_u32,
                 vcgt_u32,
-                vclt_u32,
                 vmask_u32,
             ) }
         }
@@ -161,7 +157,6 @@ generate_simd_support! {
                 vaddq_s32,
                 vsubq_s32,
                 vcgtq_s32,
-                vcltq_s32,
                 vmaskq_u32,
             ) }
         }
@@ -179,7 +174,6 @@ generate_simd_support! {
                 vaddq_s32,
                 vsubq_s32,
                 vcgtq_s32,
-                vcltq_s32,
                 vmaskq_u32,
             ) }
         }
@@ -201,7 +195,6 @@ generate_simd_support! {
                 vshrq_n_s32,
                 vshlq_n_s32,
                 vcgtq_s32,
-                vcltq_s32,
                 vmaskq_s32,
                 vmaskq_u32,
             ) }
@@ -263,7 +256,6 @@ generate_simd_support! {
                 vshrq_n_u32,
                 vshlq_n_u32,
                 vcgtq_u32,
-                vcltq_u32,
                 vmaskq_u32,
             ) }
         }
@@ -305,7 +297,6 @@ generate_simd_support! {
                 vaddqx2_s32,
                 vsubqx2_s32,
                 vcgtqx2_s32,
-                vcltqx2_s32,
                 vmaskqx2_u32,
             ) }
         }
@@ -323,7 +314,6 @@ generate_simd_support! {
                 vaddqx2_s32,
                 vsubqx2_s32,
                 vcgtqx2_s32,
-                vcltqx2_s32,
                 vmaskqx2_u32,
             ) }
         }
@@ -345,7 +335,6 @@ generate_simd_support! {
                 vshrqx2_n_s32,
                 vshlqx2_n_s32,
                 vcgtqx2_s32,
-                vcltqx2_s32,
                 vmaskqx2_s32,
                 vmaskqx2_u32,
             ) }
@@ -407,7 +396,6 @@ generate_simd_support! {
                 vshrqx2_n_u32,
                 vshlqx2_n_u32,
                 vcgtqx2_u32,
-                vcltqx2_u32,
                 vmaskqx2_u32,
             ) }
         }
@@ -496,19 +484,19 @@ unsafe fn vmask_u32(v: uint32x2_t) -> u8 {
 #[inline]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn vmaskq_s32(v: int32x4_t) -> u8 {
-    ((vgetq_lane_s32::<3>(v) != 0) as u8)
-        << 3 + ((vgetq_lane_s32::<2>(v) != 0) as u8)
-        << 2 + ((vgetq_lane_s32::<1>(v) != 0) as u8)
-        << 1 + ((vgetq_lane_s32::<0>(v) != 0) as u8)
+    (((vgetq_lane_s32::<3>(v) != 0) as u8) << 3)
+        + (((vgetq_lane_s32::<2>(v) != 0) as u8) << 2)
+        + (((vgetq_lane_s32::<1>(v) != 0) as u8) << 1)
+        + ((vgetq_lane_s32::<0>(v) != 0) as u8)
 }
 
 #[inline]
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn vmaskq_u32(v: uint32x4_t) -> u8 {
-    ((vgetq_lane_u32::<3>(v) != 0) as u8)
-        << 3 + ((vgetq_lane_u32::<2>(v) != 0) as u8)
-        << 2 + ((vgetq_lane_u32::<1>(v) != 0) as u8)
-        << 1 + ((vgetq_lane_u32::<0>(v) != 0) as u8)
+    (((vgetq_lane_u32::<3>(v) != 0) as u8) << 3)
+        + (((vgetq_lane_u32::<2>(v) != 0) as u8) << 2)
+        + (((vgetq_lane_u32::<1>(v) != 0) as u8) << 1)
+        + ((vgetq_lane_u32::<0>(v) != 0) as u8)
 }
 
 #[inline]
@@ -569,18 +557,6 @@ unsafe fn vcgtqx2_s32(a: int32x4x2_t, b: int32x4x2_t) -> uint32x4x2_t {
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn vcgtqx2_u32(a: uint32x4x2_t, b: uint32x4x2_t) -> uint32x4x2_t {
     uint32x4x2_t(vcgtq_u32(a.0, b.0), vcgtq_u32(a.1, b.1))
-}
-
-#[inline]
-#[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn vcltqx2_s32(a: int32x4x2_t, b: int32x4x2_t) -> uint32x4x2_t {
-    uint32x4x2_t(vcltq_s32(a.0, b.0), vcltq_s32(a.1, b.1))
-}
-
-#[inline]
-#[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn vcltqx2_u32(a: uint32x4x2_t, b: uint32x4x2_t) -> uint32x4x2_t {
-    uint32x4x2_t(vcltq_u32(a.0, b.0), vcltq_u32(a.1, b.1))
 }
 
 #[inline]

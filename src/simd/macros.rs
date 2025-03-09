@@ -38,13 +38,12 @@ macro_rules! overflowing_check {
         $add:ident,
         $sub:ident,
         $cgt:ident,
-        $clt:ident,
         $mask:ident,
     ) => {{
         (
             $add($lhs, $rhs),
             $mask($cgt($lhs, $sub($mov(<$t>::MAX), $rhs))) > 0
-                || $mask($clt($lhs, $sub($mov(<$t>::MIN), $rhs))) > 0,
+                || $mask($cgt($sub($mov(<$t>::MIN), $rhs), $lhs)) > 0,
         )
     }};
     (
@@ -70,13 +69,12 @@ macro_rules! overflowing_check {
         $add:ident,
         $sub:ident,
         $cgt:ident,
-        $clt:ident,
         $mask:ident,
     ) => {{
         (
             $sub($lhs, $rhs),
             $mask($cgt($lhs, $add($mov(<$t>::MAX), $rhs))) > 0
-                || $mask($clt($lhs, $add($mov(<$t>::MIN), $rhs))) > 0,
+                || $mask($cgt($add($mov(<$t>::MIN), $rhs), $lhs)) > 0,
         )
     }};
     (
@@ -106,7 +104,6 @@ macro_rules! overflowing_check {
         $shr:ident,
         $shl:ident,
         $cgt:ident,
-        $clt:ident,
         $mask_signed:ident,
         $mask_unsigned:ident,
     ) => {{
@@ -136,10 +133,10 @@ macro_rules! overflowing_check {
         let midbits = $add(midbits1, midbits2);
 
         overflowed = overflowed
-            || $mask_unsigned($clt(midbits, midbits1)) > 0
+            || $mask_unsigned($cgt(midbits1, midbits)) > 0
             || $mask_unsigned($cgt(midbits, half_size_vector)) > 0;
         let product = $add(lowbits, $shl::<HALF_SIZE_BITS>(midbits));
-        overflowed = overflowed || $mask_unsigned($clt(product, lowbits)) > 0;
+        overflowed = overflowed || $mask_unsigned($cgt(lowbits, product)) > 0;
 
         ($mul(sign, product), overflowed)
     }};
@@ -154,7 +151,6 @@ macro_rules! overflowing_check {
         $shr:ident,
         $shl:ident,
         $cgt:ident,
-        $clt:ident,
         $mask:ident,
     ) => {{
         const HALF_SIZE_BITS: i32 = (<$t>::BITS / 2) as i32;
@@ -179,10 +175,10 @@ macro_rules! overflowing_check {
         let midbits = $add(midbits1, midbits2);
 
         overflowed = overflowed
-            || $mask($clt(midbits, midbits1)) > 0
+            || $mask($cgt(midbits1, midbits)) > 0
             || $mask($cgt(midbits, half_size_vector)) > 0;
         let product = $add(lowbits, $shl::<HALF_SIZE_BITS>(midbits));
-        overflowed = overflowed || $mask($clt(product, lowbits)) > 0;
+        overflowed = overflowed || $mask($cgt(lowbits, product)) > 0;
 
         (product, overflowed)
     }};
