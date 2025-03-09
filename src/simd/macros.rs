@@ -1,31 +1,37 @@
 macro_rules! generate_simd_support {
     (
         for [$n:literal x $t:ty] use $simd:ty,
+        $(impl base {
+            $($(#[$attr:meta])* $($modifier:ident)+ $(<$($lifetime:lifetime),*>)? ($($arg_name:ident: $arg_ty:ty),* $(,)?) -> $return_ty:ty $body:block)*
+        })?
         $(impl trait $trait:ident {
-            $($(#[$attr:meta])* $($modifier:ident)+($($arg_name:ident: $arg_ty:ty),* $(,)?) -> $return_ty:ty $body:block)*
+            $($(#[$impl_attr:meta])* $($impl_modifier:ident)+ $(<$($impl_lifetime:lifetime),*>)? ($($impl_arg_name:ident: $impl_arg_ty:ty),* $(,)?) -> $impl_return_ty:ty $impl_body:block)*
         })*
     ) => {
         impl $crate::simd::SupportedNativeSimd<$t, $n> for $crate::simd::LaneCount<$t, $n> {
             type SimdType = $simd;
+            $($(generate_simd_support! {
+                $(#[$attr])* $($modifier)+ $(<$($lifetime),*>)? ($($arg_name: $arg_ty),*) -> $return_ty $body
+            })*)?
         }
 
         $(impl $trait<$t, $n> for $crate::simd::LaneCount<$t, $n> {
             $(generate_simd_support! {
-                $(#[$attr])* $($modifier)+ ($($arg_name: $arg_ty),*) -> $return_ty $body
+                $(#[$impl_attr])* $($impl_modifier)+ $(<$($impl_lifetime),*>)? ($($impl_arg_name: $impl_arg_ty),*) -> $impl_return_ty $impl_body
             })*
         })*
     };
     // used to generate correctly an unsafe fn
-    ($(#[$attr:meta])* unsafe fn $caller:ident($($arg_name:ident: $arg_ty:ty),* $(,)?) -> $return_ty:ty $body:block) => {
+    ($(#[$attr:meta])* unsafe fn $caller:ident $(<$($lifetime:lifetime),*>)?($($arg_name:ident: $arg_ty:ty),* $(,)?) -> $return_ty:ty $body:block) => {
         $(#[$attr])*
         #[inline]
-        unsafe fn $caller($($arg_name: $arg_ty),*) -> $return_ty $body
+        unsafe fn $caller$(<$($lifetime,)*>)?($($arg_name: $arg_ty),*) -> $return_ty $body
     };
     // used to generate correctly a fn
-    ($(#[$attr:meta])* fn $caller:ident($($arg_name:ident: $arg_ty:ty),* $(,)?) -> $return_ty:ty $body:block) => {
+    ($(#[$attr:meta])* fn $caller:ident $(<$($lifetime:lifetime),*>)?($($arg_name:ident: $arg_ty:ty),* $(,)?) -> $return_ty:ty $body:block) => {
         $(#[$attr])*
         #[inline]
-        fn $caller($($arg_name: $arg_ty),*) -> $return_ty $body
+        fn $caller$(<$($lifetime,)*>)?($($arg_name: $arg_ty),*) -> $return_ty $body
     };
 }
 

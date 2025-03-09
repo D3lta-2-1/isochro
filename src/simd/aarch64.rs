@@ -6,6 +6,16 @@ use super::{ArithmeticSimdOperation, CheckIntOverflowSimd};
 
 generate_simd_support! {
     for [2 x i32] use int32x2_t,
+    impl base {
+        fn as_array_ref<'a>(value: &'a int32x2_t) -> &'a [i32] {
+            // SAFETY: value is valid and correctly aligned and containe the
+            // right number of elements
+            unsafe { std::slice::from_raw_parts(
+                value as *const int32x2_t as *const i32,
+                2
+            ) }
+        }
+    }
     impl trait CheckIntOverflowSimd {
         fn overflowing_add(lhs: int32x2_t, rhs: int32x2_t) -> (int32x2_t, bool) {
             // SAFETY: lhs and rhs are correctly aligned and defined
@@ -68,6 +78,16 @@ generate_simd_support! {
 
 generate_simd_support! {
     for [2 x u32] use uint32x2_t,
+    impl base {
+        fn as_array_ref<'a>(value: &'a uint32x2_t) -> &'a [u32] {
+            // SAFETY: value is valid and correctly aligned and containe the
+            // right number of elements
+            unsafe { std::slice::from_raw_parts(
+                value as *const uint32x2_t as *const u32,
+                2
+            ) }
+        }
+    }
     impl trait CheckIntOverflowSimd {
         fn overflowing_add(lhs: uint32x2_t, rhs: uint32x2_t) -> (uint32x2_t, bool) {
             // SAFETY: lhs and rhs are correctly aligned and defined
@@ -128,6 +148,16 @@ generate_simd_support! {
 
 generate_simd_support! {
     for [2 x f32] use float32x2_t,
+    impl base {
+        fn as_array_ref<'a>(value: &'a float32x2_t) -> &'a [f32] {
+            // SAFETY: value is valid and correctly aligned and containe the
+            // right number of elements
+            unsafe { std::slice::from_raw_parts(
+                value as *const float32x2_t as *const f32,
+                2
+            ) }
+        }
+    }
     impl trait ArithmeticSimdOperation {
         fn add(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
             // SAFETY: lhs and rhs are correctly aligned and defined
@@ -146,6 +176,16 @@ generate_simd_support! {
 
 generate_simd_support! {
     for [4 x i32] use int32x4_t,
+    impl base {
+        fn as_array_ref<'a>(value: &'a int32x4_t) -> &'a [i32] {
+            // SAFETY: value is valid and correctly aligned and containe the
+            // right number of elements
+            unsafe { std::slice::from_raw_parts(
+                value as *const int32x4_t as *const i32,
+                4
+            ) }
+        }
+    }
     impl trait CheckIntOverflowSimd {
         fn overflowing_add(lhs: int32x4_t, rhs: int32x4_t) -> (int32x4_t, bool) {
             // SAFETY: lhs and rhs are correctly aligned and defined
@@ -208,6 +248,16 @@ generate_simd_support! {
 
 generate_simd_support! {
     for [4 x u32] use uint32x4_t,
+    impl base {
+        fn as_array_ref<'a>(value: &'a uint32x4_t) -> &'a [u32] {
+            // SAFETY: value is valid and correctly aligned and containe the
+            // right number of elements
+            unsafe { std::slice::from_raw_parts(
+                value as *const uint32x4_t as *const u32,
+                4
+            ) }
+        }
+    }
     impl trait CheckIntOverflowSimd {
         fn overflowing_add(lhs: uint32x4_t, rhs: uint32x4_t) -> (uint32x4_t, bool) {
             // SAFETY: lhs and rhs are correctly aligned and defined
@@ -268,6 +318,16 @@ generate_simd_support! {
 
 generate_simd_support! {
     for [4 x f32] use float32x4_t,
+    impl base {
+        fn as_array_ref<'a>(value: &'a float32x4_t) -> &'a [f32] {
+            // SAFETY: value is valid and correctly aligned and containe the
+            // right number of elements
+            unsafe { std::slice::from_raw_parts(
+                value as *const float32x4_t as *const f32,
+                4
+            ) }
+        }
+    }
     impl trait ArithmeticSimdOperation {
         fn add(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
             // SAFETY: lhs and rhs are correctly aligned and defined
@@ -286,6 +346,16 @@ generate_simd_support! {
 
 generate_simd_support! {
     for [8 x i32] use int32x4x2_t,
+    impl base {
+        fn as_array_ref<'a>(value: &'a int32x4x2_t) -> &'a [i32] {
+            // SAFETY: value is valid and correctly aligned and containe the
+            // right number of elements
+            unsafe { std::slice::from_raw_parts(
+                value as *const int32x4x2_t as *const i32,
+                8
+            ) }
+        }
+    }
     impl trait CheckIntOverflowSimd {
         fn overflowing_add(lhs: int32x4x2_t, rhs: int32x4x2_t) -> (int32x4x2_t, bool) {
             // SAFETY: lhs and rhs are correctly aligned and defined
@@ -348,6 +418,16 @@ generate_simd_support! {
 
 generate_simd_support! {
     for [8 x u32] use uint32x4x2_t,
+    impl base {
+        fn as_array_ref<'a>(value: &'a uint32x4x2_t) -> &'a [u32] {
+            // SAFETY: value is valid and correctly aligned and containe the
+            // right number of elements
+            unsafe { std::slice::from_raw_parts(
+                value as *const uint32x4x2_t as *const u32,
+                8
+            ) }
+        }
+    }
     impl trait CheckIntOverflowSimd {
         fn overflowing_add(lhs: uint32x4x2_t, rhs: uint32x4x2_t) -> (uint32x4x2_t, bool) {
             // SAFETY: lhs and rhs are correctly aligned and defined
@@ -408,6 +488,16 @@ generate_simd_support! {
 
 generate_simd_support! {
     for [8 x f32] use float32x4x2_t,
+    impl base {
+        fn as_array_ref<'a>(value: &'a float32x4x2_t) -> &'a [f32] {
+            // SAFETY: value is valid and correctly aligned and containe the
+            // right number of elements
+            unsafe { std::slice::from_raw_parts(
+                value as *const float32x4x2_t as *const f32,
+                8
+            ) }
+        }
+    }
     impl trait ArithmeticSimdOperation {
         fn add(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t {
             // SAFETY: lhs and rhs are correctly aligned and defined

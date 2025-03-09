@@ -1,7 +1,8 @@
+use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::ops::{Add, Mul, Sub};
-use std::ptr::{addr_of_mut, copy_nonoverlapping};
+use std::ptr::copy_nonoverlapping;
 
 use macros::generate_simd_support;
 
@@ -27,10 +28,27 @@ impl<T, const N: usize> Simd<T, N>
 where
     LaneCount<T, N>: SupportedNativeSimd<T, N>,
 {
+    /// Converts an array to a SIMD vector.
     #[inline]
     pub fn from_array(array: [T; N]) -> Self {
         // SAFETY: `&array` is safe to read.
         unsafe { Self(<LaneCount<T, N> as SupportedNativeSimd<T, N>>::load(&array)) }
+    }
+
+    /// Converts a SIMD vector to an array.
+    #[inline]
+    pub fn to_array(self) -> [T; N] {
+        let mut tmp = MaybeUninit::<[T; N]>::uninit();
+        unsafe {
+            <LaneCount<T, N> as SupportedNativeSimd<T, N>>::store(tmp.as_mut_ptr(), self.0);
+            tmp.assume_init()
+        }
+    }
+
+    /// Returns an array reference containing the entire SIMD vector.
+    #[inline]
+    pub fn as_array(&self) -> &[T] {
+        <LaneCount<T, N> as SupportedNativeSimd<T, N>>::as_array_ref(&self.0)
     }
 
     /// Calculates `self + rhs`.
@@ -195,6 +213,15 @@ where
     }
 }
 
+impl<T: Debug, const N: usize> Debug for Simd<T, N>
+where
+    LaneCount<T, N>: SupportedNativeSimd<T, N>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        <[T] as Debug>::fmt(self.as_array(), f)
+    }
+}
+
 impl<T, const N: usize> Add for Simd<T, N>
 where
     LaneCount<T, N>: ArithmeticSimdOperation<T, N>,
@@ -244,6 +271,25 @@ pub(crate) struct LaneCount<T, const N: usize>(PhantomData<T>);
 pub(crate) trait SupportedNativeSimd<T, const N: usize>: Sized {
     type SimdType: Copy;
 
+    /// Returns an array reference containing the entire SIMD vector.
+    fn as_array_ref<'a>(value: &'a Self::SimdType) -> &'a [T];
+
+    /// Store a vector into an array of `T`.
+    ///
+    /// # Safety
+    ///
+    /// Writing `mem_addr` must be safe, as if by [`std::ptr::write`].
+    unsafe fn store(mem_addr: *mut [T; N], value: Self::SimdType) {
+        // SAFETY: the safety contract for `store` must be upheld by the caller
+        unsafe {
+            copy_nonoverlapping(
+                (&raw const value) as *const u8,
+                mem_addr as *mut u8,
+                size_of::<Self::SimdType>(),
+            );
+        }
+    }
+
     /// Loads a vector from an array of `T`.
     ///
     /// # Safety
@@ -257,7 +303,7 @@ pub(crate) trait SupportedNativeSimd<T, const N: usize>: Sized {
         unsafe {
             copy_nonoverlapping(
                 mem_addr as *const u8,
-                addr_of_mut!(dst) as *mut u8,
+                (&raw mut dst) as *mut u8,
                 size_of::<Self::SimdType>(),
             );
         }
@@ -455,6 +501,11 @@ macro_rules! gen_single_int {
     ($($t:ty),* $(,)?) => {
         $(generate_simd_support! {
             for [1 x $t] use $t,
+            impl base {
+                fn as_array_ref<'a>(value: &'a $t) -> &'a [$t] {
+                    std::slice::from_ref(value)
+                }
+            }
             // FIXME: use +, - and * over the implementation define above
             // impl trait ArithmeticSimdOperation {
             //     fn add(lhs: $t, rhs: $t) -> $t { lhs + rhs }
@@ -490,6 +541,11 @@ macro_rules! gen_single_float {
     ($($t:ty),* $(,)?) => {
         $(generate_simd_support! {
             for [1 x $t] use $t,
+            impl base {
+                fn as_array_ref<'a>(value: &'a $t) -> &'a [$t] {
+                    std::slice::from_ref(value)
+                }
+            }
             impl trait ArithmeticSimdOperation {
                 fn add(lhs: $t, rhs: $t) -> $t { lhs + rhs }
                 fn sub(lhs: $t, rhs: $t) -> $t { lhs - rhs }
