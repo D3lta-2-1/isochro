@@ -1,3 +1,18 @@
+macro_rules! assert_unsafe_precondition {
+    ($message:expr, ($($name:ident:$ty:ty = $arg:expr),*$(,)?) => $e:expr $(,)?) => {
+        {
+            if cfg!(debug_assertions) {
+                $(let $name: $ty = $arg;)*
+                if !$e {
+                    panic!(concat!("unsafe precondition(s) violated: ", $message,
+                        "\n\nThis indicates a bug in the program. \
+                        This Undefined Behavior check is optional, and cannot be relied on for safety."));
+                }
+            }
+        }
+    };
+}
+
 /// This macro implement the version of "&U for T", "U for &T" and "&U for &T" for binary operators
 macro_rules! forward_ref_binop {
     (impl$(<$($generic:ident),* $(;$(const $const_name:ident : $const_ty:ty),*)?>)? $trait:ident<$u:ty>, $method:ident for $t:ty $(where $($tt:tt)*)?) => {
@@ -41,4 +56,4 @@ macro_rules! forward_ref_binop {
 
 // This trick allow the usage of the macros exported without the inconvence of
 // the #[macro_export] that is more like an pub
-pub(crate) use forward_ref_binop;
+pub(crate) use {assert_unsafe_precondition, forward_ref_binop};
