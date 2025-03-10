@@ -1,6 +1,6 @@
 macro_rules! generate_simd_support {
     (
-        for [$n:literal x $t:ty] use $simd:ty,
+        for [$n:literal x $t:ty] use $simd:ty $(: $not_native:ident)?,
         $(impl base {
             $($(#[$attr:meta])* $($modifier:ident)+ $(<$($lifetime:lifetime),*>)? ($($arg_name:ident: $arg_ty:ty),* $(,)?) -> $return_ty:ty $body:block)*
         })?
@@ -8,6 +8,8 @@ macro_rules! generate_simd_support {
             $($(#[$impl_attr:meta])* $($impl_modifier:ident)+ $(<$($impl_lifetime:lifetime),*>)? ($($impl_arg_name:ident: $impl_arg_ty:ty),* $(,)?) -> $impl_return_ty:ty $impl_body:block)*
         })*
     ) => {
+        generate_simd_support! { impl_native_simd$(($not_native))? $simd }
+
         impl $crate::simd::SupportedNativeSimd<$t, $n> for $crate::simd::LaneCount<$t, $n> {
             type SimdType = $simd;
             $($(generate_simd_support! {
@@ -33,6 +35,10 @@ macro_rules! generate_simd_support {
         #[inline]
         fn $caller$(<$($lifetime,)*>)?($($arg_name: $arg_ty),*) -> $return_ty $body
     };
+    (impl_native_simd $simd:ty) => {
+        impl $crate::simd::boundaries::markers::NativeSimd for $simd {}
+    };
+    (impl_native_simd(not_native) $simd:ty) => {};
 }
 
 macro_rules! overflowing_check {

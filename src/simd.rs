@@ -4,16 +4,15 @@ use std::mem::MaybeUninit;
 use std::ops::{Add, Mul, Sub};
 use std::ptr::copy_nonoverlapping;
 
+use boundaries::{ArithmeticSimdOperation, CheckIntOverflowSimd};
 use macros::generate_simd_support;
-
-use crate::macros::assert_unsafe_precondition;
-use crate::utils::unlikely;
 
 #[cfg(target_arch = "aarch64")]
 mod aarch64;
 #[cfg(target_arch = "x86_64")]
 mod x86_64;
 
+mod boundaries;
 mod macros;
 
 #[allow(private_bounds)]
@@ -311,207 +310,20 @@ pub(crate) trait SupportedNativeSimd<T, const N: usize>: Sized {
     }
 }
 
-pub(crate) trait ArithmeticSimdOperation<T, const N: usize>:
-    SupportedNativeSimd<T, N>
-{
-    fn add(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType;
-    fn sub(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType;
-    fn mul(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType;
-}
-
-pub(crate) trait CheckIntOverflowSimd<T, const N: usize>:
-    ArithmeticSimdOperation<T, N>
-{
-    /// Calculates `lhs + rhs`.
-    ///
-    /// Returns a tuple of the addition along with a boolean indicating whether
-    /// an arithmetic overflow would occur. If an overflow would have occurred
-    /// then the wrapped value is returned.
-    fn overflowing_add(lhs: Self::SimdType, rhs: Self::SimdType) -> (Self::SimdType, bool);
-
-    /// Wrapping (modular) addition. Computes `lhs + rhs`, wrapping around at
-    /// the boundary of the type.
-    fn wrapping_add(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType;
-
-    /// Unchecked addition. Computes `lhs + rhs`, assuming overflow cannot occur.
-    ///
-    /// Calling `Self::unchecked_add(x, y)` is semantically equivalent to calling
-    /// `Self::checked_add(x, y).unwrap_unchecked()`.
-    ///
-    /// If you're just trying to avoid the panic in debug mode, then do not use
-    /// this. Instead, you're looking for [`Self::wrapping_add`].
-    ///
-    /// # Safety
-    ///
-    /// This results in undefined behavior when `lhs + rhs > T::MAX` or
-    /// `lhs + rhs < T::MIN`, i.e. when checked_add would return None.
-    #[inline]
-    unsafe fn unchecked_add(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType {
-        let (sum, overflow) = Self::overflowing_add(lhs, rhs);
-        assert_unsafe_precondition!(
-            "Simd::unchecked_add cannot overflow",
-            () => !overflow,
-        );
-
-        sum
-    }
-
-    /// Checked addition. Computes `lhs + rhs`, returning None if overflow occurred.
-    #[inline]
-    fn checked_add(lhs: Self::SimdType, rhs: Self::SimdType) -> Option<Self::SimdType> {
-        if unlikely(Self::overflowing_add(lhs, rhs).1) {
-            None
-        } else {
-            // SAFETY: Just checked it doesn't overflow
-            Some(unsafe { Self::unchecked_add(lhs, rhs) })
-        }
-    }
-
-    /// Calculates `lhs - rhs`.
-    ///
-    /// Returns a tuple of the subtraction along with a boolean indicating whether
-    /// an arithmetic overflow would occur. If an overflow would have occurred
-    /// then the wrapped value is returned.
-    fn overflowing_sub(lhs: Self::SimdType, rhs: Self::SimdType) -> (Self::SimdType, bool);
-
-    /// Wrapping (modular) subtraction. Computes `lhs - rhs`, wrapping around at
-    /// the boundary of the type.
-    fn wrapping_sub(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType;
-
-    /// Unchecked subtraction. Computes `lhs - rhs`, assuming overflow cannot occur.
-    ///
-    /// Calling `Self::unchecked_sub(x, y)` is semantically equivalent to calling
-    /// `Self::checked_sub(x, y).unwrap_unchecked()`.
-    ///
-    /// If you're just trying to avoid the panic in debug mode, then do not use
-    /// this. Instead, you're looking for [`Self::wrapping_sub`].
-    ///
-    /// # Safety
-    ///
-    /// This results in undefined behavior when `lhs - rhs > T::MAX` or
-    /// `lhs - rhs < T::MIN`, i.e. when checked_sub would return None.
-    #[inline]
-    unsafe fn unchecked_sub(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType {
-        let (sum, overflow) = Self::overflowing_sub(lhs, rhs);
-        assert_unsafe_precondition!(
-            "Simd::unchecked_add cannot overflow",
-            () => !overflow,
-        );
-
-        sum
-    }
-
-    /// Checked subtraction. Computes `lhs - rhs`, returning None if overflow occurred.
-    #[inline]
-    fn checked_sub(lhs: Self::SimdType, rhs: Self::SimdType) -> Option<Self::SimdType> {
-        if unlikely(Self::overflowing_sub(lhs, rhs).1) {
-            None
-        } else {
-            // SAFETY: Just checked it doesn't overflow
-            Some(unsafe { Self::unchecked_sub(lhs, rhs) })
-        }
-    }
-
-    /// Calculates `lhs * rhs`.
-    ///
-    /// Returns a tuple of the multiplication along with a boolean indicating whether
-    /// an arithmetic overflow would occur. If an overflow would have occurred
-    /// then the wrapped value is returned.
-    fn overflowing_mul(lhs: Self::SimdType, rhs: Self::SimdType) -> (Self::SimdType, bool);
-
-    /// Wrapping (modular) multiplication. Computes `lhs * rhs`, wrapping around at
-    /// the boundary of the type.
-    fn wrapping_mul(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType;
-
-    /// Unchecked multiplication. Computes `lhs * rhs`, assuming overflow cannot occur.
-    ///
-    /// Calling `Self::unchecked_mul(x, y)` is semantically equivalent to calling
-    /// `Self::checked_mul(x, y).unwrap_unchecked()`.
-    ///
-    /// If you're just trying to avoid the panic in debug mode, then do not use
-    /// this. Instead, you're looking for [`Self::wrapping_mul`].
-    ///
-    /// # Safety
-    ///
-    /// This results in undefined behavior when `lhs * rhs > T::MAX` or
-    /// `lhs * rhs < T::MIN`, i.e. when checked_sub would return None.
-    #[inline]
-    unsafe fn unchecked_mul(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType {
-        let (sum, overflow) = Self::overflowing_mul(lhs, rhs);
-        assert_unsafe_precondition!(
-            "Simd::unchecked_add cannot overflow",
-            () => !overflow,
-        );
-
-        sum
-    }
-
-    /// Checked multiplication. Computes `lhs * rhs`, returning None if overflow occurred.
-    #[inline]
-    fn checked_mul(lhs: Self::SimdType, rhs: Self::SimdType) -> Option<Self::SimdType> {
-        if unlikely(Self::overflowing_mul(lhs, rhs).1) {
-            None
-        } else {
-            // SAFETY: Just checked it doesn't overflow
-            Some(unsafe { Self::unchecked_mul(lhs, rhs) })
-        }
-    }
-}
-
-impl<T, U, const N: usize> ArithmeticSimdOperation<U, N> for T
-where
-    T: CheckIntOverflowSimd<U, N>,
-{
-    fn add(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType {
-        if cfg!(debug_assertions) {
-            let (sum, overflow) = Self::overflowing_add(lhs, rhs);
-            if overflow {
-                panic!("attempt to add with overflow");
-            }
-            sum
-        } else {
-            Self::wrapping_add(lhs, rhs)
-        }
-    }
-    fn sub(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType {
-        if cfg!(debug_assertions) {
-            let (sum, overflow) = Self::overflowing_sub(lhs, rhs);
-            if overflow {
-                panic!("attempt to sub with overflow");
-            }
-            sum
-        } else {
-            Self::wrapping_sub(lhs, rhs)
-        }
-    }
-    fn mul(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType {
-        if cfg!(debug_assertions) {
-            let (sum, overflow) = Self::overflowing_mul(lhs, rhs);
-            if overflow {
-                panic!("attempt to mul with overflow");
-            }
-            sum
-        } else {
-            Self::wrapping_mul(lhs, rhs)
-        }
-    }
-}
-
 macro_rules! gen_single_int {
     ($($t:ty),* $(,)?) => {
         $(generate_simd_support! {
-            for [1 x $t] use $t,
+            for [1 x $t] use $t : not_native,
             impl base {
                 fn as_array_ref<'a>(value: &'a $t) -> &'a [$t] {
                     std::slice::from_ref(value)
                 }
             }
-            // FIXME: use +, - and * over the implementation define above
-            // impl trait ArithmeticSimdOperation {
-            //     fn add(lhs: $t, rhs: $t) -> $t { lhs + rhs }
-            //     fn sub(lhs: $t, rhs: $t) -> $t { lhs - rhs }
-            //     fn mul(lhs: $t, rhs: $t) -> $t { lhs * rhs }
-            // }
+            impl trait ArithmeticSimdOperation {
+                fn add(lhs: $t, rhs: $t) -> $t { lhs + rhs }
+                fn sub(lhs: $t, rhs: $t) -> $t { lhs - rhs }
+                fn mul(lhs: $t, rhs: $t) -> $t { lhs * rhs }
+            }
             impl trait CheckIntOverflowSimd {
                 fn overflowing_add(lhs: $t, rhs: $t) -> ($t, bool) { lhs.overflowing_add(rhs) }
                 fn wrapping_add(lhs: $t, rhs: $t) -> $t { lhs.wrapping_add(rhs) }

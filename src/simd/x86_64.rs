@@ -215,7 +215,7 @@ generate_simd_support! {
 }
 
 generate_simd_support! {
-    for [4 x u32] use __m128i,
+    for [4 x u32] use __m128i : not_native,
     impl base {
         fn as_array_ref<'a>(value: &'a __m128i) -> &'a [u32] {
             // SAFETY: value is valid and correctly aligned and containe the
@@ -382,7 +382,7 @@ generate_simd_support! {
 }
 
 generate_simd_support! {
-    for [8 x u32] use __m256i,
+    for [8 x u32] use __m256i : not_native,
     impl base {
         fn as_array_ref<'a>(value: &'a __m256i) -> &'a [u32] {
             // SAFETY: value is valid and correctly aligned and containe the
