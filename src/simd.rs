@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
-use std::ops::{Add, Mul, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Not, Sub};
 use std::ptr::copy_nonoverlapping;
 
-use boundaries::{ArithmeticSimdOperation, CheckIntOverflowSimd};
+use boundaries::{ArithmeticSimdOperation, CheckIntOverflowSimd, ComparisonSimdOperation};
 use macros::generate_simd_support;
 
 #[cfg(target_arch = "aarch64")]
@@ -46,8 +46,53 @@ where
 
     /// Returns an array reference containing the entire SIMD vector.
     #[inline]
-    pub fn as_array(&self) -> &[T] {
-        <LaneCount<T, N> as SupportedNativeSimd<T, N>>::as_array_ref(&self.0)
+    pub fn as_array(&self) -> &[T]
+    where
+        <LaneCount<T, N> as SupportedNativeSimd<T, N>>::InnerRef: AsRef<[T]>,
+    {
+        <LaneCount<T, N> as SupportedNativeSimd<T, N>>::as_inner_ref(&self.0).as_ref()
+    }
+
+    pub fn partial_eq(self, rhs: Self) -> Simd<bool, N>
+    where
+        LaneCount<T, N>: ComparisonSimdOperation<T, N>,
+        LaneCount<bool, N>: SupportedNativeSimd<
+                bool,
+                N,
+                SimdType = <LaneCount<T, N> as SupportedNativeSimd<T, N>>::Mask,
+            >,
+    {
+        Simd(<LaneCount<T, N> as ComparisonSimdOperation<T, N>>::eq(
+            self.0, rhs.0,
+        ))
+    }
+
+    pub fn partial_gt(self, rhs: Self) -> Simd<bool, N>
+    where
+        LaneCount<T, N>: ComparisonSimdOperation<T, N>,
+        LaneCount<bool, N>: SupportedNativeSimd<
+                bool,
+                N,
+                SimdType = <LaneCount<T, N> as SupportedNativeSimd<T, N>>::Mask,
+            >,
+    {
+        Simd(<LaneCount<T, N> as ComparisonSimdOperation<T, N>>::gt(
+            self.0, rhs.0,
+        ))
+    }
+
+    pub fn partial_lt(self, rhs: Self) -> Simd<bool, N>
+    where
+        LaneCount<T, N>: ComparisonSimdOperation<T, N>,
+        LaneCount<bool, N>: SupportedNativeSimd<
+                bool,
+                N,
+                SimdType = <LaneCount<T, N> as SupportedNativeSimd<T, N>>::Mask,
+            >,
+    {
+        Simd(<LaneCount<T, N> as ComparisonSimdOperation<T, N>>::eq(
+            self.0, rhs.0,
+        ))
     }
 
     /// Calculates `self + rhs`.
@@ -217,7 +262,7 @@ where
     LaneCount<T, N>: SupportedNativeSimd<T, N>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        <[T] as Debug>::fmt(self.as_array(), f)
+        <LaneCount<T, N> as SupportedNativeSimd<T, N>>::as_inner_ref(&self.0).fmt(f)
     }
 }
 
@@ -263,15 +308,61 @@ where
     }
 }
 
+impl<const N: usize> BitAnd for Simd<bool, N>
+where
+    LaneCount<bool, N>: SupportedNativeSimd<bool, N>,
+    <LaneCount<bool, N> as SupportedNativeSimd<bool, N>>::SimdType:
+        BitAnd<Output = <LaneCount<bool, N> as SupportedNativeSimd<bool, N>>::SimdType>,
+{
+    type Output = Simd<bool, N>;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
+}
+
+impl<const N: usize> BitOr for Simd<bool, N>
+where
+    LaneCount<bool, N>: SupportedNativeSimd<bool, N>,
+    <LaneCount<bool, N> as SupportedNativeSimd<bool, N>>::SimdType:
+        BitOr<Output = <LaneCount<bool, N> as SupportedNativeSimd<bool, N>>::SimdType>,
+{
+    type Output = Simd<bool, N>;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl<const N: usize> BitXor for Simd<bool, N>
+where
+    LaneCount<bool, N>: SupportedNativeSimd<bool, N>,
+    <LaneCount<bool, N> as SupportedNativeSimd<bool, N>>::SimdType:
+        BitXor<Output = <LaneCount<bool, N> as SupportedNativeSimd<bool, N>>::SimdType>,
+{
+    type Output = Simd<bool, N>;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        Self(self.0 ^ rhs.0)
+    }
+}
+
 /// Specifies the number of lanes in a SIMD vector as a type.
 pub(crate) struct LaneCount<T, const N: usize>(PhantomData<T>);
 
 /// Trait used as a marker to force the user
 pub(crate) trait SupportedNativeSimd<T, const N: usize>: Sized {
+    /// Represent the native simd type used internally
     type SimdType: Copy;
 
+    /// Represent the type of the mask when the simd type is cast to a bool
+    type Mask: Copy + BitAnd + BitOr + BitXor + Not;
+
+    /// Represent the ref of the simd array
+    type InnerRef: Debug + ?Sized;
+
     /// Returns an array reference containing the entire SIMD vector.
-    fn as_array_ref<'a>(value: &'a Self::SimdType) -> &'a [T];
+    fn as_inner_ref<'a>(value: &'a Self::SimdType) -> &'a Self::InnerRef;
 
     /// Store a vector into an array of `T`.
     ///
@@ -313,9 +404,11 @@ pub(crate) trait SupportedNativeSimd<T, const N: usize>: Sized {
 macro_rules! gen_single_int {
     ($($t:ty),* $(,)?) => {
         $(generate_simd_support! {
-            for [1 x $t] use $t : not_native,
+            for [1 x $t] use $t : not_native;
+            type InnerRef = [$t];
+            type Mask = bool;
             impl base {
-                fn as_array_ref<'a>(value: &'a $t) -> &'a [$t] {
+                fn as_inner_ref<'a>(value: &'a $t) -> &'a [$t] {
                     std::slice::from_ref(value)
                 }
             }
@@ -352,9 +445,11 @@ gen_single_int! {
 macro_rules! gen_single_float {
     ($($t:ty),* $(,)?) => {
         $(generate_simd_support! {
-            for [1 x $t] use $t,
+            for [1 x $t] use $t;
+            type InnerRef = [$t];
+            type Mask = bool;
             impl base {
-                fn as_array_ref<'a>(value: &'a $t) -> &'a [$t] {
+                fn as_inner_ref<'a>(value: &'a $t) -> &'a [$t] {
                     std::slice::from_ref(value)
                 }
             }
@@ -369,4 +464,45 @@ macro_rules! gen_single_float {
 
 gen_single_float! {
     f32
+}
+
+generate_simd_support! {
+    for [1 x bool] use u8 : not_native;
+    type InnerRef = u8;
+    type Mask = u8;
+    impl base {
+        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 {
+            value
+        }
+    }
+}
+generate_simd_support! {
+    for [2 x bool] use u8 : not_native;
+    type InnerRef = u8;
+    type Mask = u8;
+    impl base {
+        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 {
+            value
+        }
+    }
+}
+generate_simd_support! {
+    for [4 x bool] use u8 : not_native;
+    type InnerRef = u8;
+    type Mask = u8;
+    impl base {
+        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 {
+            value
+        }
+    }
+}
+generate_simd_support! {
+    for [8 x bool] use u8 : not_native;
+    type InnerRef = u8;
+    type Mask = u8;
+    impl base {
+        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 {
+            value
+        }
+    }
 }

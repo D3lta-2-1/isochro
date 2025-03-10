@@ -1,6 +1,7 @@
 use std::arch::x86_64::*;
 use std::mem::transmute;
 
+use super::boundaries::ComparisonSimdOperation;
 use super::macros::{generate_simd_support, overflowing_check};
 use super::{ArithmeticSimdOperation, CheckIntOverflowSimd};
 
@@ -20,9 +21,11 @@ pub struct __m64u([u32; 2]);
 pub struct __m64([f32; 2]);
 
 generate_simd_support! {
-    for [2 x i32] use __m64i,
+    for [2 x i32] use __m64i;
+    type InnerRef = [i32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a __m64i) -> &'a [i32] {
+        fn as_inner_ref<'a>(value: &'a __m64i) -> &'a [i32] {
             &value.0
         }
     }
@@ -69,12 +72,32 @@ generate_simd_support! {
             ])
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: __m64i, rhs: __m64i) -> __m64i {
+            __m64i([
+                lhs.0[0].cmp(&rhs.0[0]) as i32,
+                lhs.0[1].cmp(&rhs.0[1]) as i32,
+            ])
+        }
+
+        fn eq(lhs: __m64i, rhs: __m64i) -> u8 {
+            (lhs.0[0] == rhs.0[0]) as u8 + ((lhs.0[1] == rhs.0[1]) as u8) << 1
+        }
+        fn gt(lhs: __m64i, rhs: __m64i) -> u8 {
+            (lhs.0[0] > rhs.0[0]) as u8 + ((lhs.0[1] > rhs.0[1]) as u8) << 1
+        }
+        fn lt(lhs: __m64i, rhs: __m64i) -> u8 {
+            (lhs.0[0] < rhs.0[0]) as u8 + ((lhs.0[1] < rhs.0[1]) as u8) << 1
+        }
+    }
 }
 
 generate_simd_support! {
-    for [2 x u32] use __m64u,
+    for [2 x u32] use __m64u;
+    type InnerRef = [u32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a __m64u) -> &'a [u32] {
+        fn as_inner_ref<'a>(value: &'a __m64u) -> &'a [u32] {
             &value.0
         }
     }
@@ -121,12 +144,32 @@ generate_simd_support! {
             ])
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: __m64u, rhs: __m64u) -> __m64u {
+            __m64u([
+                lhs.0[0].cmp(&rhs.0[0]) as u32,
+                lhs.0[1].cmp(&rhs.0[1]) as u32,
+            ])
+        }
+
+        fn eq(lhs: __m64u, rhs: __m64u) -> u8 {
+            (lhs.0[0] == rhs.0[0]) as u8 + ((lhs.0[1] == rhs.0[1]) as u8) << 1
+        }
+        fn gt(lhs: __m64u, rhs: __m64u) -> u8 {
+            (lhs.0[0] > rhs.0[0]) as u8 + ((lhs.0[1] > rhs.0[1]) as u8) << 1
+        }
+        fn lt(lhs: __m64u, rhs: __m64u) -> u8 {
+            (lhs.0[0] < rhs.0[0]) as u8 + ((lhs.0[1] < rhs.0[1]) as u8) << 1
+        }
+    }
 }
 
 generate_simd_support! {
-    for [2 x f32] use __m64,
+    for [2 x f32] use __m64;
+    type InnerRef = [f32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a __m64) -> &'a [f32] {
+        fn as_inner_ref<'a>(value: &'a __m64) -> &'a [f32] {
             &value.0
         }
     }
@@ -141,12 +184,34 @@ generate_simd_support! {
             __m64([lhs.0[0] * rhs.0[0], lhs.0[1] * rhs.0[1]])
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: __m64, rhs: __m64) -> __m64 {
+            // SAFETY: i32/u32 is the same size as f32 and we copy the result of
+            // the simd x86 comparison
+            unsafe { __m64([
+                transmute(lhs.0[0].total_cmp(&rhs.0[0]) as i32),
+                transmute(lhs.0[1].total_cmp(&rhs.0[1]) as i32),
+            ]) }
+        }
+
+        fn eq(lhs: __m64, rhs: __m64) -> u8 {
+            (lhs.0[0] == rhs.0[0]) as u8 + ((lhs.0[1] == rhs.0[1]) as u8) << 1
+        }
+        fn gt(lhs: __m64, rhs: __m64) -> u8 {
+            (lhs.0[0] > rhs.0[0]) as u8 + ((lhs.0[1] > rhs.0[1]) as u8) << 1
+        }
+        fn lt(lhs: __m64, rhs: __m64) -> u8 {
+            (lhs.0[0] < rhs.0[0]) as u8 + ((lhs.0[1] < rhs.0[1]) as u8) << 1
+        }
+    }
 }
 
 generate_simd_support! {
-    for [4 x i32] use __m128i,
+    for [4 x i32] use __m128i;
+    type InnerRef = [i32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a __m128i) -> &'a [i32] {
+        fn as_inner_ref<'a>(value: &'a __m128i) -> &'a [i32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -212,12 +277,32 @@ generate_simd_support! {
             unsafe { _mm_mul_epi32(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: __m128i, rhs: __m128i) -> __m128i {
+            unsafe { _mm_add_epi32(
+                _mm_mul_epi32(_mm_cmpgt_epu32(lhs, rhs), _mm_set1_epi32(-1)),
+                _mm_cmpgt_epu32(rhs, lhs)
+            ) }
+        }
+
+        fn eq(lhs: __m128i, rhs: __m128i) -> u8 {
+            unsafe { _mm_mask_epi32(_mm_cmpeq_epi32(lhs, rhs)) }
+        }
+        fn gt(lhs: __m128i, rhs: __m128i) -> u8 {
+            unsafe { _mm_mask_epi32(_mm_cmpgt_epu32(lhs, rhs)) }
+        }
+        fn lt(lhs: __m128i, rhs: __m128i) -> u8 {
+            unsafe { _mm_mask_epi32(_mm_cmpgt_epu32(rhs, lhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [4 x u32] use __m128i : not_native,
+    for [4 x u32] use __m128i : not_native;
+    type InnerRef = [u32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a __m128i) -> &'a [u32] {
+        fn as_inner_ref<'a>(value: &'a __m128i) -> &'a [u32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -283,12 +368,32 @@ generate_simd_support! {
             unsafe { _mm_mul_epi32(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: __m128i, rhs: __m128i) -> __m128i {
+            unsafe { _mm_add_epi32(
+                _mm_mul_epi32(_mm_cmpgt_epu32(lhs, rhs), _mm_set1_epi32(-1)),
+                _mm_cmpgt_epu32(rhs, lhs)
+            ) }
+        }
+
+        fn eq(lhs: __m128i, rhs: __m128i) -> u8 {
+            unsafe { _mm_mask_epi32(_mm_cmpeq_epi32(lhs, rhs)) }
+        }
+        fn gt(lhs: __m128i, rhs: __m128i) -> u8 {
+            unsafe { _mm_mask_epi32(_mm_cmpgt_epu32(lhs, rhs)) }
+        }
+        fn lt(lhs: __m128i, rhs: __m128i) -> u8 {
+            unsafe { _mm_mask_epi32(_mm_cmpgt_epu32(rhs, lhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [4 x f32] use __m128,
+    for [4 x f32] use __m128;
+    type InnerRef = [f32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a __m128) -> &'a [f32] {
+        fn as_inner_ref<'a>(value: &'a __m128) -> &'a [f32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -308,12 +413,34 @@ generate_simd_support! {
             unsafe { _mm_mul_ps(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: __m128, rhs: __m128) -> __m128 {
+            unsafe {
+                // transform all NaN into 1 and 0 into 0 by using: ((v as i32) * -1) as f32
+                let v = transmute(_mm_cmpgt_ps(lhs, rhs));
+                let greater = transmute(_mm_mul_epi32(v, _mm_set1_epi32(-1)));
+                _mm_add_ps(greater, _mm_cmpgt_ps(rhs, lhs))
+            }
+        }
+
+        fn eq(lhs: __m128, rhs: __m128) -> u8 {
+            unsafe { _mm_mask_ps(_mm_cmpeq_ps(lhs, rhs)) }
+        }
+        fn gt(lhs: __m128, rhs: __m128) -> u8 {
+            unsafe { _mm_mask_ps(_mm_cmpgt_ps(lhs, rhs)) }
+        }
+        fn lt(lhs: __m128, rhs: __m128) -> u8 {
+            unsafe { _mm_mask_ps(_mm_cmpgt_ps(rhs, lhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [8 x i32] use __m256i,
+    for [8 x i32] use __m256i;
+    type InnerRef = [i32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a __m256i) -> &'a [i32] {
+        fn as_inner_ref<'a>(value: &'a __m256i) -> &'a [i32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -379,12 +506,32 @@ generate_simd_support! {
             unsafe { _mm256_mul_epi32(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: __m256i, rhs: __m256i) -> __m256i {
+            unsafe { _mm256_add_epi32(
+                _mm256_mul_epi32(_mm256_cmpgt_epu32(lhs, rhs), _mm256_set1_epi32(-1)),
+                _mm256_cmpgt_epu32(rhs, lhs)
+            ) }
+        }
+
+        fn eq(lhs: __m256i, rhs: __m256i) -> u8 {
+            unsafe { _mm256_mask_epi32(_mm256_cmpeq_epi32(lhs, rhs)) }
+        }
+        fn gt(lhs: __m256i, rhs: __m256i) -> u8 {
+            unsafe { _mm256_mask_epi32(_mm256_cmpgt_epu32(lhs, rhs)) }
+        }
+        fn lt(lhs: __m256i, rhs: __m256i) -> u8 {
+            unsafe { _mm256_mask_epi32(_mm256_cmpgt_epu32(rhs, lhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [8 x u32] use __m256i : not_native,
+    for [8 x u32] use __m256i : not_native;
+    type InnerRef = [u32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a __m256i) -> &'a [u32] {
+        fn as_inner_ref<'a>(value: &'a __m256i) -> &'a [u32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -450,12 +597,32 @@ generate_simd_support! {
             unsafe { _mm256_mul_epi32(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: __m256i, rhs: __m256i) -> __m256i {
+            unsafe { _mm256_add_epi32(
+                _mm256_mul_epi32(_mm256_cmpgt_epu32(lhs, rhs), _mm256_set1_epi32(-1)),
+                _mm256_cmpgt_epu32(rhs, lhs)
+            ) }
+        }
+
+        fn eq(lhs: __m256i, rhs: __m256i) -> u8 {
+            unsafe { _mm256_mask_epi32(_mm256_cmpeq_epi32(lhs, rhs)) }
+        }
+        fn gt(lhs: __m256i, rhs: __m256i) -> u8 {
+            unsafe { _mm256_mask_epi32(_mm256_cmpgt_epu32(lhs, rhs)) }
+        }
+        fn lt(lhs: __m256i, rhs: __m256i) -> u8 {
+            unsafe { _mm256_mask_epi32(_mm256_cmpgt_epu32(rhs, lhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [8 x f32] use __m256,
+    for [8 x f32] use __m256;
+    type InnerRef = [f32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a __m256) -> &'a [f32] {
+        fn as_inner_ref<'a>(value: &'a __m256) -> &'a [f32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -473,6 +640,26 @@ generate_simd_support! {
         }
         fn mul(lhs: __m256, rhs: __m256) -> __m256 {
             unsafe { _mm256_mul_ps(lhs, rhs) }
+        }
+    }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: __m256, rhs: __m256) -> __m256 {
+            unsafe {
+                // transform all NaN into 1 and 0 into 0 by using: ((v as i32) * -1) as f32
+                let v = transmute(_mm256_cmp_ps::<_CMP_GT_OQ>(lhs, rhs));
+                let greater = transmute(_mm256_mul_epi32(v, _mm256_set1_epi32(-1)));
+                _mm256_add_ps(greater, _mm256_cmp_ps::<_CMP_LT_OQ>(lhs, rhs))
+            }
+        }
+
+        fn eq(lhs: __m256, rhs: __m256) -> u8 {
+            unsafe { _mm256_mask_ps(_mm256_cmp_ps::<_CMP_EQ_OQ>(lhs, rhs)) }
+        }
+        fn gt(lhs: __m256, rhs: __m256) -> u8 {
+            unsafe { _mm256_mask_ps(_mm256_cmp_ps::<_CMP_GT_OQ>(lhs, rhs)) }
+        }
+        fn lt(lhs: __m256, rhs: __m256) -> u8 {
+            unsafe { _mm256_mask_ps(_mm256_cmp_ps::<_CMP_LT_OQ>(lhs, rhs)) }
         }
     }
 }
@@ -503,6 +690,15 @@ unsafe fn _mm_mask_epi32(v: __m128i) -> u8 {
 
 #[inline]
 #[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn _mm_mask_ps(v: __m128) -> u8 {
+    (((_mm_extract_ps::<3>(v) != 0) as u8) << 3)
+        + (((_mm_extract_ps::<2>(v) != 0) as u8) << 2)
+        + (((_mm_extract_ps::<1>(v) != 0) as u8) << 1)
+        + ((_mm_extract_ps::<0>(v) != 0) as u8)
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn _mm256_mask_epi32(v: __m256i) -> u8 {
     (((_mm256_extract_epi32::<7>(v) != 0) as u8) << 7)
         + (((_mm256_extract_epi32::<6>(v) != 0) as u8) << 6)
@@ -512,6 +708,12 @@ unsafe fn _mm256_mask_epi32(v: __m256i) -> u8 {
         + (((_mm256_extract_epi32::<2>(v) != 0) as u8) << 2)
         + (((_mm256_extract_epi32::<1>(v) != 0) as u8) << 1)
         + ((_mm256_extract_epi32::<0>(v) != 0) as u8)
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn _mm256_mask_ps(v: __m256) -> u8 {
+    (_mm_mask_ps(_mm256_extractf128_ps::<1>(v)) << 4) + _mm_mask_ps(_mm256_extractf128_ps::<0>(v))
 }
 
 #[inline]

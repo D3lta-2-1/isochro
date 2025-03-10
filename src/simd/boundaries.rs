@@ -152,6 +152,16 @@ pub(crate) trait CheckIntOverflowSimd<T, const N: usize>:
     }
 }
 
+pub(crate) trait ComparisonSimdOperation<T, const N: usize>:
+    SupportedNativeSimd<T, N>
+{
+    fn cmp(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType;
+
+    fn eq(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::Mask;
+    fn gt(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::Mask;
+    fn lt(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::Mask;
+}
+
 impl<T, U, const N: usize> ArithmeticSimdOperation<U, N> for T
 where
     T: CheckIntOverflowSimd<U, N>,

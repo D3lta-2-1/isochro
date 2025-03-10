@@ -1,13 +1,17 @@
 use std::arch::aarch64::*;
 use std::i32;
+use std::mem::transmute;
 
+use super::boundaries::ComparisonSimdOperation;
 use super::macros::{generate_simd_support, overflowing_check};
 use super::{ArithmeticSimdOperation, CheckIntOverflowSimd};
 
 generate_simd_support! {
-    for [2 x i32] use int32x2_t,
+    for [2 x i32] use int32x2_t;
+    type InnerRef = [i32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a int32x2_t) -> &'a [i32] {
+        fn as_inner_ref<'a>(value: &'a int32x2_t) -> &'a [i32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -74,12 +78,32 @@ generate_simd_support! {
             unsafe { vmul_s32(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: int32x2_t, rhs: int32x2_t) -> int32x2_t {
+            unsafe { vadd_s32(
+                vmul_s32(vreinterpret_s32_u32(vcgt_s32(lhs, rhs)), vmov_n_s32(-1)),
+                vreinterpret_s32_u32(vcgt_s32(rhs, lhs))
+            ) }
+        }
+
+        fn eq(lhs: int32x2_t, rhs: int32x2_t) -> u8 {
+            unsafe { vmask_u32(vceq_s32(lhs, rhs)) }
+        }
+        fn gt(lhs: int32x2_t, rhs: int32x2_t) -> u8 {
+            unsafe { vmask_u32(vcgt_s32(lhs, rhs)) }
+        }
+        fn lt(lhs: int32x2_t, rhs: int32x2_t) -> u8 {
+            unsafe { vmask_u32(vclt_s32(lhs, rhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [2 x u32] use uint32x2_t,
+    for [2 x u32] use uint32x2_t;
+    type InnerRef = [u32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a uint32x2_t) -> &'a [u32] {
+        fn as_inner_ref<'a>(value: &'a uint32x2_t) -> &'a [u32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -144,12 +168,32 @@ generate_simd_support! {
             unsafe { vmul_u32(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: uint32x2_t, rhs: uint32x2_t) -> uint32x2_t {
+            unsafe { vadd_u32(
+                vmul_u32(vcgt_u32(lhs, rhs), vmov_n_u32(!0)),
+                vcgt_u32(rhs, lhs)
+            ) }
+        }
+
+        fn eq(lhs: uint32x2_t, rhs: uint32x2_t) -> u8 {
+            unsafe { vmask_u32(vceq_u32(lhs, rhs)) }
+        }
+        fn gt(lhs: uint32x2_t, rhs: uint32x2_t) -> u8 {
+            unsafe { vmask_u32(vcgt_u32(lhs, rhs)) }
+        }
+        fn lt(lhs: uint32x2_t, rhs: uint32x2_t) -> u8 {
+            unsafe { vmask_u32(vclt_u32(lhs, rhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [2 x f32] use float32x2_t,
+    for [2 x f32] use float32x2_t;
+    type InnerRef = [f32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a float32x2_t) -> &'a [f32] {
+        fn as_inner_ref<'a>(value: &'a float32x2_t) -> &'a [f32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -172,12 +216,32 @@ generate_simd_support! {
             unsafe { vmul_f32(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
+            unsafe { vadd_f32(
+                transmute(vmul_u32(vcgt_f32(lhs, rhs), vmov_n_u32(!0))),
+                transmute(vcgt_f32(rhs, lhs))
+            ) }
+        }
+
+        fn eq(lhs: float32x2_t, rhs: float32x2_t) -> u8 {
+            unsafe { vmask_u32(vceq_f32(lhs, rhs)) }
+        }
+        fn gt(lhs: float32x2_t, rhs: float32x2_t) -> u8 {
+            unsafe { vmask_u32(vcgt_f32(lhs, rhs)) }
+        }
+        fn lt(lhs: float32x2_t, rhs: float32x2_t) -> u8 {
+            unsafe { vmask_u32(vclt_f32(lhs, rhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [4 x i32] use int32x4_t,
+    for [4 x i32] use int32x4_t;
+    type InnerRef = [i32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a int32x4_t) -> &'a [i32] {
+        fn as_inner_ref<'a>(value: &'a int32x4_t) -> &'a [i32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -244,12 +308,32 @@ generate_simd_support! {
             unsafe { vmulq_s32(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: int32x4_t, rhs: int32x4_t) -> int32x4_t {
+            unsafe { vaddq_s32(
+                vmulq_s32(vreinterpretq_s32_u32(vcgtq_s32(lhs, rhs)), vmovq_n_s32(-1)),
+                vreinterpretq_s32_u32(vcgtq_s32(rhs, lhs))
+            ) }
+        }
+
+        fn eq(lhs: int32x4_t, rhs: int32x4_t) -> u8 {
+            unsafe { vmaskq_u32(vceqq_s32(lhs, rhs)) }
+        }
+        fn gt(lhs: int32x4_t, rhs: int32x4_t) -> u8 {
+            unsafe { vmaskq_u32(vcgtq_s32(lhs, rhs)) }
+        }
+        fn lt(lhs: int32x4_t, rhs: int32x4_t) -> u8 {
+            unsafe { vmaskq_u32(vcltq_s32(lhs, rhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [4 x u32] use uint32x4_t,
+    for [4 x u32] use uint32x4_t;
+    type InnerRef = [u32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a uint32x4_t) -> &'a [u32] {
+        fn as_inner_ref<'a>(value: &'a uint32x4_t) -> &'a [u32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -314,12 +398,32 @@ generate_simd_support! {
             unsafe { vmulq_u32(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: uint32x4_t, rhs: uint32x4_t) -> uint32x4_t {
+            unsafe { vaddq_u32(
+                vmulq_u32(vcgtq_u32(lhs, rhs), vmovq_n_u32(!0)),
+                vcgtq_u32(rhs, lhs)
+            ) }
+        }
+
+        fn eq(lhs: uint32x4_t, rhs: uint32x4_t) -> u8 {
+            unsafe { vmaskq_u32(vceqq_u32(lhs, rhs)) }
+        }
+        fn gt(lhs: uint32x4_t, rhs: uint32x4_t) -> u8 {
+            unsafe { vmaskq_u32(vcgtq_u32(lhs, rhs)) }
+        }
+        fn lt(lhs: uint32x4_t, rhs: uint32x4_t) -> u8 {
+            unsafe { vmaskq_u32(vcltq_u32(lhs, rhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [4 x f32] use float32x4_t,
+    for [4 x f32] use float32x4_t;
+    type InnerRef = [f32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a float32x4_t) -> &'a [f32] {
+        fn as_inner_ref<'a>(value: &'a float32x4_t) -> &'a [f32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -342,12 +446,32 @@ generate_simd_support! {
             unsafe { vmulq_f32(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
+            unsafe { vaddq_f32(
+                transmute(vmulq_u32(vcgtq_f32(lhs, rhs), vmovq_n_u32(!0))),
+                transmute(vcgtq_f32(rhs, lhs))
+            ) }
+        }
+
+        fn eq(lhs: float32x4_t, rhs: float32x4_t) -> u8 {
+            unsafe { vmaskq_u32(vceqq_f32(lhs, rhs)) }
+        }
+        fn gt(lhs: float32x4_t, rhs: float32x4_t) -> u8 {
+            unsafe { vmaskq_u32(vcgtq_f32(lhs, rhs)) }
+        }
+        fn lt(lhs: float32x4_t, rhs: float32x4_t) -> u8 {
+            unsafe { vmaskq_u32(vcltq_f32(lhs, rhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [8 x i32] use int32x4x2_t,
+    for [8 x i32] use int32x4x2_t;
+    type InnerRef = [i32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a int32x4x2_t) -> &'a [i32] {
+        fn as_inner_ref<'a>(value: &'a int32x4x2_t) -> &'a [i32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -414,12 +538,32 @@ generate_simd_support! {
             unsafe { vmulqx2_s32(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: int32x4x2_t, rhs: int32x4x2_t) -> int32x4x2_t {
+            unsafe { vaddqx2_s32(
+                vmulqx2_s32(transmute(vcgtqx2_s32(lhs, rhs)), vmovqx2_n_s32(-1)),
+                transmute(vcgtqx2_s32(rhs, lhs))
+            ) }
+        }
+
+        fn eq(lhs: int32x4x2_t, rhs: int32x4x2_t) -> u8 {
+            unsafe { vmaskqx2_u32(vceqqx2_s32(lhs, rhs)) }
+        }
+        fn gt(lhs: int32x4x2_t, rhs: int32x4x2_t) -> u8 {
+            unsafe { vmaskqx2_u32(vcgtqx2_s32(lhs, rhs)) }
+        }
+        fn lt(lhs: int32x4x2_t, rhs: int32x4x2_t) -> u8 {
+            unsafe { vmaskqx2_u32(vcgtqx2_s32(rhs, lhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [8 x u32] use uint32x4x2_t,
+    for [8 x u32] use uint32x4x2_t;
+    type InnerRef = [u32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a uint32x4x2_t) -> &'a [u32] {
+        fn as_inner_ref<'a>(value: &'a uint32x4x2_t) -> &'a [u32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -484,12 +628,32 @@ generate_simd_support! {
             unsafe { vmulqx2_u32(lhs, rhs) }
         }
     }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: uint32x4x2_t, rhs: uint32x4x2_t) -> uint32x4x2_t {
+            unsafe { vaddqx2_u32(
+                vmulqx2_u32(vcgtqx2_u32(lhs, rhs), vmovqx2_n_u32(!0)),
+                vcgtqx2_u32(rhs, lhs)
+            ) }
+        }
+
+        fn eq(lhs: uint32x4x2_t, rhs: uint32x4x2_t) -> u8 {
+            unsafe { vmaskqx2_u32(vceqqx2_u32(lhs, rhs)) }
+        }
+        fn gt(lhs: uint32x4x2_t, rhs: uint32x4x2_t) -> u8 {
+            unsafe { vmaskqx2_u32(vcgtqx2_u32(lhs, rhs)) }
+        }
+        fn lt(lhs: uint32x4x2_t, rhs: uint32x4x2_t) -> u8 {
+            unsafe { vmaskqx2_u32(vcgtqx2_u32(rhs, lhs)) }
+        }
+    }
 }
 
 generate_simd_support! {
-    for [8 x f32] use float32x4x2_t,
+    for [8 x f32] use float32x4x2_t;
+    type InnerRef = [f32];
+    type Mask = u8;
     impl base {
-        fn as_array_ref<'a>(value: &'a float32x4x2_t) -> &'a [f32] {
+        fn as_inner_ref<'a>(value: &'a float32x4x2_t) -> &'a [f32] {
             // SAFETY: value is valid and correctly aligned and containe the
             // right number of elements
             unsafe { std::slice::from_raw_parts(
@@ -510,6 +674,24 @@ generate_simd_support! {
         fn mul(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t {
             // SAFETY: lhs and rhs are correctly aligned and defined
             unsafe { float32x4x2_t(vmulq_f32(lhs.0, rhs.0), vmulq_f32(lhs.1, rhs.1)) }
+        }
+    }
+    impl trait ComparisonSimdOperation {
+        fn cmp(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t {
+            unsafe { vaddqx2_f32(
+                transmute(vmulqx2_u32(vcgtqx2_f32(lhs, rhs), vmovqx2_n_u32(!0))),
+                transmute(vcgtqx2_f32(rhs, lhs))
+            ) }
+        }
+
+        fn eq(lhs: float32x4x2_t, rhs: float32x4x2_t) -> u8 {
+            unsafe { vmaskqx2_u32(vceqqx2_f32(lhs, rhs)) }
+        }
+        fn gt(lhs: float32x4x2_t, rhs: float32x4x2_t) -> u8 {
+            unsafe { vmaskqx2_u32(vcgtqx2_f32(lhs, rhs)) }
+        }
+        fn lt(lhs: float32x4x2_t, rhs: float32x4x2_t) -> u8 {
+            unsafe { vmaskqx2_u32(vcgtqx2_f32(rhs, lhs)) }
         }
     }
 }
@@ -615,6 +797,12 @@ unsafe fn vmovqx2_n_u32(value: u32) -> uint32x4x2_t {
 
 #[inline]
 #[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn vaddqx2_f32(a: float32x4x2_t, b: float32x4x2_t) -> float32x4x2_t {
+    float32x4x2_t(vaddq_f32(a.0, b.0), vaddq_f32(a.1, b.1))
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn vaddqx2_s32(a: int32x4x2_t, b: int32x4x2_t) -> int32x4x2_t {
     int32x4x2_t(vaddq_s32(a.0, b.0), vaddq_s32(a.1, b.1))
 }
@@ -635,6 +823,30 @@ unsafe fn vsubqx2_s32(a: int32x4x2_t, b: int32x4x2_t) -> int32x4x2_t {
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn vsubqx2_u32(a: uint32x4x2_t, b: uint32x4x2_t) -> uint32x4x2_t {
     uint32x4x2_t(vsubq_u32(a.0, b.0), vsubq_u32(a.1, b.1))
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn vceqqx2_f32(a: float32x4x2_t, b: float32x4x2_t) -> uint32x4x2_t {
+    uint32x4x2_t(vceqq_f32(a.0, b.0), vceqq_f32(a.1, b.1))
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn vceqqx2_s32(a: int32x4x2_t, b: int32x4x2_t) -> uint32x4x2_t {
+    uint32x4x2_t(vceqq_s32(a.0, b.0), vceqq_s32(a.1, b.1))
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn vceqqx2_u32(a: uint32x4x2_t, b: uint32x4x2_t) -> uint32x4x2_t {
+    uint32x4x2_t(vceqq_u32(a.0, b.0), vceqq_u32(a.1, b.1))
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn vcgtqx2_f32(a: float32x4x2_t, b: float32x4x2_t) -> uint32x4x2_t {
+    uint32x4x2_t(vcgtq_f32(a.0, b.0), vcgtq_f32(a.1, b.1))
 }
 
 #[inline]
