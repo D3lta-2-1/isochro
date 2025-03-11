@@ -396,7 +396,7 @@ pub unsafe trait SimdElement<const N: usize>: Sealed + Copy {
     /// # Safety
     ///
     /// Writing `mem_addr` must be safe, as if by [`std::ptr::write`].
-    unsafe fn store<T>(mem_addr: *mut [T; N], value: Self::NativeType) {
+    unsafe fn store(mem_addr: *mut [Self; N], value: Self::NativeType) {
         // SAFETY: the safety contract for `store` must be upheld by the caller
         unsafe {
             copy_nonoverlapping(
@@ -412,7 +412,7 @@ pub unsafe trait SimdElement<const N: usize>: Sealed + Copy {
     /// # Safety
     ///
     /// Reading `mem_addr` must be safe, as if by [`std::ptr::read`].
-    unsafe fn load<T>(mem_addr: *const [T; N]) -> Self::NativeType {
+    unsafe fn load(mem_addr: *const [Self; N]) -> Self::NativeType {
         // SAFETY: create a empty destination correctly aligned (like, for __m256
         // that require a alignement of 32)
         let mut dst: Self::NativeType = unsafe { MaybeUninit::zeroed().assume_init() };
@@ -493,36 +493,100 @@ gen_single_float! {
     f32
 }
 
-generate_simd_support! {
-    for [1 x bool] use u8 : not_native;
+unsafe impl SimdElement<1> for bool {
+    type NativeType = u8;
     type InnerRef = u8;
     type Mask = u8;
-    impl base {
-        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
+
+    fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
+
+    unsafe fn load(mem_addr: *const [Self; 1]) -> Self::NativeType {
+        // SAFETY: the call of `load` must have a mem_addr valid.
+        unsafe { *(mem_addr as *const bool) as u8 }
+    }
+
+    unsafe fn store(mem_addr: *mut [Self; 1], value: Self::NativeType) {
+        // SAFETY: the call of `store` must have a mem_addr valid.
+        unsafe {
+            *(mem_addr as *mut bool) = value != 0;
+        }
     }
 }
-generate_simd_support! {
-    for [2 x bool] use u8 : not_native;
+
+unsafe impl SimdElement<2> for bool {
+    type NativeType = u8;
     type InnerRef = u8;
     type Mask = u8;
-    impl base {
-        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
+
+    fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
+
+    unsafe fn load(mem_addr: *const [Self; 2]) -> Self::NativeType {
+        // SAFETY: the call of `load` must have a mem_addr valid.
+        let array = unsafe { *mem_addr };
+        array.into_iter().rev().fold(0, |acc, b| acc << 1 | b as u8) 
+    }
+
+    unsafe fn store(mem_addr: *mut [Self; 2], value: Self::NativeType) {
+        // SAFETY: the call of `store` must have a mem_addr valid.
+        let ptr = mem_addr.cast::<bool>();
+        unsafe {
+            *ptr.offset(0) = (value & 0x1) != 0;
+            *ptr.offset(1) = (value & 0x2) != 0;
+        }
     }
 }
-generate_simd_support! {
-    for [4 x bool] use u8 : not_native;
+
+unsafe impl SimdElement<4> for bool {
+    type NativeType = u8;
     type InnerRef = u8;
     type Mask = u8;
-    impl base {
-        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
+
+    fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
+
+    unsafe fn load(mem_addr: *const [Self; 4]) -> Self::NativeType {
+        // SAFETY: the call of `load` must have a mem_addr valid.
+        let array = unsafe { *mem_addr };
+        array.into_iter().rev().fold(0, |acc, b| acc << 1 | b as u8) 
+    }
+
+    unsafe fn store(mem_addr: *mut [Self; 4], value: Self::NativeType) {
+        // SAFETY: the call of `store` must have a mem_addr valid.
+        let ptr = mem_addr.cast::<bool>();
+        unsafe {
+            *ptr.offset(0) = (value & 0x1) != 0;
+            *ptr.offset(1) = (value & 0x2) != 0;
+            *ptr.offset(2) = (value & 0x4) != 0;
+            *ptr.offset(3) = (value & 0x8) != 0;
+        }
     }
 }
-generate_simd_support! {
-    for [8 x bool] use u8 : not_native;
+
+unsafe impl SimdElement<8> for bool {
+    type NativeType = u8;
     type InnerRef = u8;
     type Mask = u8;
-    impl base {
-        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
+
+    fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
+
+    unsafe fn load(mem_addr: *const [Self; 8]) -> Self::NativeType {
+        // SAFETY: the call of `load` must have a mem_addr valid.
+        let array = unsafe { *mem_addr };
+        array.into_iter().rev().fold(0, |acc, b| acc << 1 | b as u8) 
+    }
+
+    unsafe fn store(mem_addr: *mut [Self; 8], value: Self::NativeType) {
+        // SAFETY: the call of `store` must have a mem_addr valid.
+        let ptr = mem_addr.cast::<bool>();
+        unsafe {
+            *ptr.offset(0) = (value & 0x1) != 0;
+            *ptr.offset(1) = (value & 0x2) != 0;
+            *ptr.offset(2) = (value & 0x4) != 0;
+            *ptr.offset(3) = (value & 0x8) != 0;
+            *ptr.offset(4) = (value & 0x10) != 0;
+            *ptr.offset(5) = (value & 0x20) != 0;
+            *ptr.offset(6) = (value & 0x40) != 0;
+            *ptr.offset(7) = (value & 0x80) != 0;
+        }
     }
 }
 
