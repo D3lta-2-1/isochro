@@ -5,9 +5,7 @@ use crate::utils::unlikely;
 
 use super::SupportedNativeSimd;
 
-pub(crate) trait ArithmeticSimdOperation<T, const N: usize>:
-    SupportedNativeSimd<T, N>
-{
+pub(crate) trait ArithmeticSimdOperation<const N: usize>: SupportedNativeSimd<N> {
     /// Function used to define addition for simd vector safely.
     fn add(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType;
 
@@ -18,9 +16,7 @@ pub(crate) trait ArithmeticSimdOperation<T, const N: usize>:
     fn mul(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType;
 }
 
-pub(crate) trait CheckIntOverflowSimd<T, const N: usize>:
-    ArithmeticSimdOperation<T, N>
-{
+pub(crate) trait CheckIntOverflowSimd<const N: usize>: ArithmeticSimdOperation<N> {
     /// Calculates `lhs + rhs`.
     ///
     /// Returns a tuple of the addition along with a boolean indicating whether
@@ -157,9 +153,7 @@ pub(crate) trait CheckIntOverflowSimd<T, const N: usize>:
     }
 }
 
-pub(crate) trait ComparisonSimdOperation<T, const N: usize>:
-    SupportedNativeSimd<T, N>
-{
+pub(crate) trait ComparisonSimdOperation<const N: usize>: SupportedNativeSimd<N> {
     // fn cmp(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType;
 
     /// Function used to define maximum for simd vector safely.
@@ -178,9 +172,9 @@ pub(crate) trait ComparisonSimdOperation<T, const N: usize>:
     fn lt(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::Mask;
 }
 
-impl<T, U, const N: usize> ArithmeticSimdOperation<U, N> for T
+impl<T, const N: usize> ArithmeticSimdOperation<N> for T
 where
-    T: CheckIntOverflowSimd<U, N>,
+    T: CheckIntOverflowSimd<N>,
     T::SimdType: NativeSimd,
 {
     fn add(lhs: Self::SimdType, rhs: Self::SimdType) -> Self::SimdType {
@@ -223,7 +217,7 @@ pub(crate) mod markers {
 
     pub trait NativeSimd {}
 
-    pub trait MaskElement<const N: usize>:
+    pub unsafe trait MaskElement<const N: usize>:
         Sized
         + BitAnd<Output = Self>
         + BitOr<Output = Self>
@@ -234,11 +228,11 @@ pub(crate) mod markers {
         const FULL_MASK: Self;
     }
 
-    impl<const N: usize> MaskElement<N> for bool {
+    unsafe impl<const N: usize> MaskElement<N> for bool {
         const FULL_MASK: Self = true;
     }
 
-    impl<const N: usize> MaskElement<N> for u8 {
+    unsafe impl<const N: usize> MaskElement<N> for u8 {
         const FULL_MASK: Self = u8::MAX
             >> (8 - match N {
                 0..8 => N as u8,
