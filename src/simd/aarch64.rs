@@ -1,6 +1,4 @@
 use std::arch::aarch64::*;
-use std::i32;
-use std::mem::transmute;
 
 use super::boundaries::ComparisonSimdOperation;
 use super::macros::{generate_simd_support, overflowing_check};
@@ -79,11 +77,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: int32x2_t, rhs: int32x2_t) -> int32x2_t {
-            unsafe { vadd_s32(
-                vmul_s32(vreinterpret_s32_u32(vcgt_s32(lhs, rhs)), vmov_n_s32(-1)),
-                vreinterpret_s32_u32(vcgt_s32(rhs, lhs))
-            ) }
+        // fn cmp(lhs: int32x2_t, rhs: int32x2_t) -> int32x2_t {
+        //     unsafe { vadd_s32(
+        //         vmul_s32(vreinterpret_s32_u32(vcgt_s32(lhs, rhs)), vmov_n_s32(-1)),
+        //         vreinterpret_s32_u32(vcgt_s32(rhs, lhs))
+        //     ) }
+        // }
+
+        fn max(lhs: int32x2_t, rhs: int32x2_t) -> int32x2_t {
+            unsafe { vmax_s32(lhs, rhs) }
+        }
+        fn min(lhs: int32x2_t, rhs: int32x2_t) -> int32x2_t {
+            unsafe { vmin_s32(lhs, rhs) }
         }
 
         fn eq(lhs: int32x2_t, rhs: int32x2_t) -> u8 {
@@ -169,11 +174,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: uint32x2_t, rhs: uint32x2_t) -> uint32x2_t {
-            unsafe { vadd_u32(
-                vmul_u32(vcgt_u32(lhs, rhs), vmov_n_u32(!0)),
-                vcgt_u32(rhs, lhs)
-            ) }
+        // fn cmp(lhs: uint32x2_t, rhs: uint32x2_t) -> uint32x2_t {
+        //     unsafe { vadd_u32(
+        //         vmul_u32(vcgt_u32(lhs, rhs), vmov_n_u32(!0)),
+        //         vcgt_u32(rhs, lhs)
+        //     ) }
+        // }
+
+        fn max(lhs: uint32x2_t, rhs: uint32x2_t) -> uint32x2_t {
+            unsafe { vmax_u32(lhs, rhs) }
+        }
+        fn min(lhs: uint32x2_t, rhs: uint32x2_t) -> uint32x2_t {
+            unsafe { vmin_u32(lhs, rhs) }
         }
 
         fn eq(lhs: uint32x2_t, rhs: uint32x2_t) -> u8 {
@@ -217,11 +229,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
-            unsafe { vadd_f32(
-                transmute(vmul_u32(vcgt_f32(lhs, rhs), vmov_n_u32(!0))),
-                transmute(vcgt_f32(rhs, lhs))
-            ) }
+        // fn cmp(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
+        //     unsafe { vadd_f32(
+        //         transmute(vmul_u32(vcgt_f32(lhs, rhs), vmov_n_u32(!0))),
+        //         transmute(vcgt_f32(rhs, lhs))
+        //     ) }
+        // }
+
+        fn max(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
+            unsafe { vmax_f32(lhs, rhs) }
+        }
+        fn min(lhs: float32x2_t, rhs: float32x2_t) -> float32x2_t {
+            unsafe { vmin_f32(lhs, rhs) }
         }
 
         fn eq(lhs: float32x2_t, rhs: float32x2_t) -> u8 {
@@ -309,11 +328,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: int32x4_t, rhs: int32x4_t) -> int32x4_t {
-            unsafe { vaddq_s32(
-                vmulq_s32(vreinterpretq_s32_u32(vcgtq_s32(lhs, rhs)), vmovq_n_s32(-1)),
-                vreinterpretq_s32_u32(vcgtq_s32(rhs, lhs))
-            ) }
+        // fn cmp(lhs: int32x4_t, rhs: int32x4_t) -> int32x4_t {
+        //     unsafe { vaddq_s32(
+        //         vmulq_s32(vreinterpretq_s32_u32(vcgtq_s32(lhs, rhs)), vmovq_n_s32(-1)),
+        //         vreinterpretq_s32_u32(vcgtq_s32(rhs, lhs))
+        //     ) }
+        // }
+
+        fn max(lhs: int32x4_t, rhs: int32x4_t) -> int32x4_t {
+            unsafe { vmaxq_s32(lhs, rhs) }
+        }
+        fn min(lhs: int32x4_t, rhs: int32x4_t) -> int32x4_t {
+            unsafe { vmaxq_s32(lhs, rhs) }
         }
 
         fn eq(lhs: int32x4_t, rhs: int32x4_t) -> u8 {
@@ -399,11 +425,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: uint32x4_t, rhs: uint32x4_t) -> uint32x4_t {
-            unsafe { vaddq_u32(
-                vmulq_u32(vcgtq_u32(lhs, rhs), vmovq_n_u32(!0)),
-                vcgtq_u32(rhs, lhs)
-            ) }
+        // fn cmp(lhs: uint32x4_t, rhs: uint32x4_t) -> uint32x4_t {
+        //     unsafe { vaddq_u32(
+        //         vmulq_u32(vcgtq_u32(lhs, rhs), vmovq_n_u32(!0)),
+        //         vcgtq_u32(rhs, lhs)
+        //     ) }
+        // }
+
+        fn max(lhs: uint32x4_t, rhs: uint32x4_t) -> uint32x4_t {
+            unsafe { vmaxq_u32(lhs, rhs) }
+        }
+        fn min(lhs: uint32x4_t, rhs: uint32x4_t) -> uint32x4_t {
+            unsafe { vminq_u32(lhs, rhs) }
         }
 
         fn eq(lhs: uint32x4_t, rhs: uint32x4_t) -> u8 {
@@ -447,11 +480,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
-            unsafe { vaddq_f32(
-                transmute(vmulq_u32(vcgtq_f32(lhs, rhs), vmovq_n_u32(!0))),
-                transmute(vcgtq_f32(rhs, lhs))
-            ) }
+        // fn cmp(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
+        //     unsafe { vaddq_f32(
+        //         transmute(vmulq_u32(vcgtq_f32(lhs, rhs), vmovq_n_u32(!0))),
+        //         transmute(vcgtq_f32(rhs, lhs))
+        //     ) }
+        // }
+
+        fn max(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
+            unsafe { vmaxq_f32(lhs, rhs) }
+        }
+        fn min(lhs: float32x4_t, rhs: float32x4_t) -> float32x4_t {
+            unsafe { vminq_f32(lhs, rhs) }
         }
 
         fn eq(lhs: float32x4_t, rhs: float32x4_t) -> u8 {
@@ -539,11 +579,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: int32x4x2_t, rhs: int32x4x2_t) -> int32x4x2_t {
-            unsafe { vaddqx2_s32(
-                vmulqx2_s32(transmute(vcgtqx2_s32(lhs, rhs)), vmovqx2_n_s32(-1)),
-                transmute(vcgtqx2_s32(rhs, lhs))
-            ) }
+        // fn cmp(lhs: int32x4x2_t, rhs: int32x4x2_t) -> int32x4x2_t {
+        //     unsafe { vaddqx2_s32(
+        //         vmulqx2_s32(transmute(vcgtqx2_s32(lhs, rhs)), vmovqx2_n_s32(-1)),
+        //         transmute(vcgtqx2_s32(rhs, lhs))
+        //     ) }
+        // }
+
+        fn max(lhs: int32x4x2_t, rhs: int32x4x2_t) -> int32x4x2_t {
+            unsafe { vmaxqx2_s32(lhs, rhs) }
+        }
+        fn min(lhs: int32x4x2_t, rhs: int32x4x2_t) -> int32x4x2_t {
+            unsafe { vminqx2_s32(lhs, rhs) }
         }
 
         fn eq(lhs: int32x4x2_t, rhs: int32x4x2_t) -> u8 {
@@ -629,11 +676,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: uint32x4x2_t, rhs: uint32x4x2_t) -> uint32x4x2_t {
-            unsafe { vaddqx2_u32(
-                vmulqx2_u32(vcgtqx2_u32(lhs, rhs), vmovqx2_n_u32(!0)),
-                vcgtqx2_u32(rhs, lhs)
-            ) }
+        // fn cmp(lhs: uint32x4x2_t, rhs: uint32x4x2_t) -> uint32x4x2_t {
+        //     unsafe { vaddqx2_u32(
+        //         vmulqx2_u32(vcgtqx2_u32(lhs, rhs), vmovqx2_n_u32(!0)),
+        //         vcgtqx2_u32(rhs, lhs)
+        //     ) }
+        // }
+
+        fn max(lhs: uint32x4x2_t, rhs: uint32x4x2_t) -> uint32x4x2_t {
+            unsafe { vmaxqx2_u32(lhs, rhs) }
+        }
+        fn min(lhs: uint32x4x2_t, rhs: uint32x4x2_t) -> uint32x4x2_t {
+            unsafe { vminqx2_u32(lhs, rhs) }
         }
 
         fn eq(lhs: uint32x4x2_t, rhs: uint32x4x2_t) -> u8 {
@@ -677,11 +731,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t {
-            unsafe { vaddqx2_f32(
-                transmute(vmulqx2_u32(vcgtqx2_f32(lhs, rhs), vmovqx2_n_u32(!0))),
-                transmute(vcgtqx2_f32(rhs, lhs))
-            ) }
+        // fn cmp(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t {
+        //     unsafe { vaddqx2_f32(
+        //         transmute(vmulqx2_u32(vcgtqx2_f32(lhs, rhs), vmovqx2_n_u32(!0))),
+        //         transmute(vcgtqx2_f32(rhs, lhs))
+        //     ) }
+        // }
+
+        fn max(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t {
+            unsafe { vmaxqx2_f32(lhs, rhs) }
+        }
+        fn min(lhs: float32x4x2_t, rhs: float32x4x2_t) -> float32x4x2_t {
+            unsafe { vminqx2_f32(lhs, rhs) }
         }
 
         fn eq(lhs: float32x4x2_t, rhs: float32x4x2_t) -> u8 {
@@ -795,11 +856,12 @@ unsafe fn vmovqx2_n_u32(value: u32) -> uint32x4x2_t {
     uint32x4x2_t(vmovq_n_u32(value), vmovq_n_u32(value))
 }
 
-#[inline]
-#[allow(unsafe_op_in_unsafe_fn)]
-unsafe fn vaddqx2_f32(a: float32x4x2_t, b: float32x4x2_t) -> float32x4x2_t {
-    float32x4x2_t(vaddq_f32(a.0, b.0), vaddq_f32(a.1, b.1))
-}
+// TODO: for cmp if it's define later
+// #[inline]
+// #[allow(unsafe_op_in_unsafe_fn)]
+// unsafe fn vaddqx2_f32(a: float32x4x2_t, b: float32x4x2_t) -> float32x4x2_t {
+//     float32x4x2_t(vaddq_f32(a.0, b.0), vaddq_f32(a.1, b.1))
+// }
 
 #[inline]
 #[allow(unsafe_op_in_unsafe_fn)]
@@ -907,4 +969,40 @@ unsafe fn vshlqx2_n_s32<const N: i32>(a: int32x4x2_t) -> int32x4x2_t {
 #[allow(unsafe_op_in_unsafe_fn)]
 unsafe fn vshlqx2_n_u32<const N: i32>(a: uint32x4x2_t) -> uint32x4x2_t {
     uint32x4x2_t(vshlq_n_u32::<N>(a.0), vshlq_n_u32::<N>(a.1))
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn vmaxqx2_s32(a: int32x4x2_t, b: int32x4x2_t) -> int32x4x2_t {
+    int32x4x2_t(vmaxq_s32(a.0, b.0), vmaxq_s32(a.1, b.1))
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn vmaxqx2_u32(a: uint32x4x2_t, b: uint32x4x2_t) -> uint32x4x2_t {
+    uint32x4x2_t(vmaxq_u32(a.0, b.0), vmaxq_u32(a.1, b.1))
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn vmaxqx2_f32(a: float32x4x2_t, b: float32x4x2_t) -> float32x4x2_t {
+    float32x4x2_t(vmaxq_f32(a.0, b.0), vmaxq_f32(a.1, b.1))
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn vminqx2_s32(a: int32x4x2_t, b: int32x4x2_t) -> int32x4x2_t {
+    int32x4x2_t(vminq_s32(a.0, b.0), vminq_s32(a.1, b.1))
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn vminqx2_u32(a: uint32x4x2_t, b: uint32x4x2_t) -> uint32x4x2_t {
+    uint32x4x2_t(vminq_u32(a.0, b.0), vminq_u32(a.1, b.1))
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn vminqx2_f32(a: float32x4x2_t, b: float32x4x2_t) -> float32x4x2_t {
+    float32x4x2_t(vminq_f32(a.0, b.0), vminq_f32(a.1, b.1))
 }

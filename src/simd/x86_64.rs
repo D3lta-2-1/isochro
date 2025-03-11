@@ -73,10 +73,23 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: __m64i, rhs: __m64i) -> __m64i {
+        // fn cmp(lhs: __m64i, rhs: __m64i) -> __m64i {
+        //     __m64i([
+        //         lhs.0[0].cmp(&rhs.0[0]) as i32,
+        //         lhs.0[1].cmp(&rhs.0[1]) as i32,
+        //     ])
+        // }
+
+        fn max(lhs: __m64i, rhs: __m64i) -> __m64i {
             __m64i([
-                lhs.0[0].cmp(&rhs.0[0]) as i32,
-                lhs.0[1].cmp(&rhs.0[1]) as i32,
+                lhs.0[0].max(rhs.0[0]),
+                lhs.0[1].max(rhs.0[1]),
+            ])
+        }
+        fn min(lhs: __m64i, rhs: __m64i) -> __m64i {
+            __m64i([
+                lhs.0[0].min(rhs.0[0]),
+                lhs.0[1].min(rhs.0[1]),
             ])
         }
 
@@ -145,10 +158,23 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: __m64u, rhs: __m64u) -> __m64u {
+        // fn cmp(lhs: __m64u, rhs: __m64u) -> __m64u {
+        //     __m64u([
+        //         lhs.0[0].cmp(&rhs.0[0]) as u32,
+        //         lhs.0[1].cmp(&rhs.0[1]) as u32,
+        //     ])
+        // }
+
+        fn max(lhs: __m64u, rhs: __m64u) -> __m64u {
             __m64u([
-                lhs.0[0].cmp(&rhs.0[0]) as u32,
-                lhs.0[1].cmp(&rhs.0[1]) as u32,
+                lhs.0[0].max(rhs.0[0]),
+                lhs.0[1].max(rhs.0[1]),
+            ])
+        }
+        fn min(lhs: __m64u, rhs: __m64u) -> __m64u {
+            __m64u([
+                lhs.0[0].min(rhs.0[0]),
+                lhs.0[1].min(rhs.0[1]),
             ])
         }
 
@@ -185,13 +211,26 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: __m64, rhs: __m64) -> __m64 {
-            // SAFETY: i32/u32 is the same size as f32 and we copy the result of
-            // the simd x86 comparison
-            unsafe { __m64([
-                transmute(lhs.0[0].total_cmp(&rhs.0[0]) as i32),
-                transmute(lhs.0[1].total_cmp(&rhs.0[1]) as i32),
-            ]) }
+        // fn cmp(lhs: __m64, rhs: __m64) -> __m64 {
+        //     // SAFETY: i32/u32 is the same size as f32 and we copy the result of
+        //     // the simd x86 comparison
+        //     unsafe { __m64([
+        //         transmute(lhs.0[0].total_cmp(&rhs.0[0]) as i32),
+        //         transmute(lhs.0[1].total_cmp(&rhs.0[1]) as i32),
+        //     ]) }
+        // }
+
+        fn max(lhs: __m64, rhs: __m64) -> __m64 {
+            __m64([
+                lhs.0[0].max(rhs.0[0]),
+                lhs.0[1].max(rhs.0[1]),
+            ])
+        }
+        fn min(lhs: __m64, rhs: __m64) -> __m64 {
+            __m64([
+                lhs.0[0].min(rhs.0[0]),
+                lhs.0[1].min(rhs.0[1]),
+            ])
         }
 
         fn eq(lhs: __m64, rhs: __m64) -> u8 {
@@ -278,11 +317,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: __m128i, rhs: __m128i) -> __m128i {
-            unsafe { _mm_add_epi32(
-                _mm_mul_epi32(_mm_cmpgt_epu32(lhs, rhs), _mm_set1_epi32(-1)),
-                _mm_cmpgt_epu32(rhs, lhs)
-            ) }
+        // fn cmp(lhs: __m128i, rhs: __m128i) -> __m128i {
+        //     unsafe { _mm_add_epi32(
+        //         _mm_mul_epi32(_mm_cmpgt_epu32(lhs, rhs), _mm_set1_epi32(-1)),
+        //         _mm_cmpgt_epu32(rhs, lhs)
+        //     ) }
+        // }
+
+        fn max(lhs: __m128i, rhs: __m128i) -> __m128i {
+            unsafe { _mm_max_epi32(lhs, rhs) }
+        }
+        fn min(lhs: __m128i, rhs: __m128i) -> __m128i {
+            unsafe { _mm_min_epi32(lhs, rhs) }
         }
 
         fn eq(lhs: __m128i, rhs: __m128i) -> u8 {
@@ -369,11 +415,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: __m128i, rhs: __m128i) -> __m128i {
-            unsafe { _mm_add_epi32(
-                _mm_mul_epi32(_mm_cmpgt_epu32(lhs, rhs), _mm_set1_epi32(-1)),
-                _mm_cmpgt_epu32(rhs, lhs)
-            ) }
+        // fn cmp(lhs: __m128i, rhs: __m128i) -> __m128i {
+        //     unsafe { _mm_add_epi32(
+        //         _mm_mul_epi32(_mm_cmpgt_epu32(lhs, rhs), _mm_set1_epi32(-1)),
+        //         _mm_cmpgt_epu32(rhs, lhs)
+        //     ) }
+        // }
+
+        fn max(lhs: __m128i, rhs: __m128i) -> __m128i {
+            unsafe { _mm_max_epu32(lhs, rhs) }
+        }
+        fn min(lhs: __m128i, rhs: __m128i) -> __m128i {
+            unsafe { _mm_min_epu32(lhs, rhs) }
         }
 
         fn eq(lhs: __m128i, rhs: __m128i) -> u8 {
@@ -414,13 +467,20 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: __m128, rhs: __m128) -> __m128 {
-            unsafe {
-                // transform all NaN into 1 and 0 into 0 by using: ((v as i32) * -1) as f32
-                let v = transmute(_mm_cmpgt_ps(lhs, rhs));
-                let greater = transmute(_mm_mul_epi32(v, _mm_set1_epi32(-1)));
-                _mm_add_ps(greater, _mm_cmpgt_ps(rhs, lhs))
-            }
+        // fn cmp(lhs: __m128, rhs: __m128) -> __m128 {
+        //     unsafe {
+        //         // transform all NaN into 1 and 0 into 0 by using: ((v as i32) * -1) as f32
+        //         let v = transmute(_mm_cmpgt_ps(lhs, rhs));
+        //         let greater = transmute(_mm_mul_epi32(v, _mm_set1_epi32(-1)));
+        //         _mm_add_ps(greater, _mm_cmpgt_ps(rhs, lhs))
+        //     }
+        // }
+
+        fn max(lhs: __m128, rhs: __m128) -> __m128 {
+            unsafe { _mm_max_ps(lhs, rhs) }
+        }
+        fn min(lhs: __m128, rhs: __m128) -> __m128 {
+            unsafe { _mm_min_ps(lhs, rhs) }
         }
 
         fn eq(lhs: __m128, rhs: __m128) -> u8 {
@@ -507,11 +567,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: __m256i, rhs: __m256i) -> __m256i {
-            unsafe { _mm256_add_epi32(
-                _mm256_mul_epi32(_mm256_cmpgt_epu32(lhs, rhs), _mm256_set1_epi32(-1)),
-                _mm256_cmpgt_epu32(rhs, lhs)
-            ) }
+        // fn cmp(lhs: __m256i, rhs: __m256i) -> __m256i {
+        //     unsafe { _mm256_add_epi32(
+        //         _mm256_mul_epi32(_mm256_cmpgt_epu32(lhs, rhs), _mm256_set1_epi32(-1)),
+        //         _mm256_cmpgt_epu32(rhs, lhs)
+        //     ) }
+        // }
+
+        fn max(lhs: __m256i, rhs: __m256i) -> __m256i {
+            unsafe { _mm256_max_epi32(lhs, rhs) }
+        }
+        fn min(lhs: __m256i, rhs: __m256i) -> __m256i {
+            unsafe { _mm256_min_epi32(lhs, rhs) }
         }
 
         fn eq(lhs: __m256i, rhs: __m256i) -> u8 {
@@ -598,11 +665,18 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: __m256i, rhs: __m256i) -> __m256i {
-            unsafe { _mm256_add_epi32(
-                _mm256_mul_epi32(_mm256_cmpgt_epu32(lhs, rhs), _mm256_set1_epi32(-1)),
-                _mm256_cmpgt_epu32(rhs, lhs)
-            ) }
+        // fn cmp(lhs: __m256i, rhs: __m256i) -> __m256i {
+        //     unsafe { _mm256_add_epi32(
+        //         _mm256_mul_epi32(_mm256_cmpgt_epu32(lhs, rhs), _mm256_set1_epi32(-1)),
+        //         _mm256_cmpgt_epu32(rhs, lhs)
+        //     ) }
+        // }
+
+        fn max(lhs: __m256i, rhs: __m256i) -> __m256i {
+            unsafe { _mm256_max_epu32(lhs, rhs) }
+        }
+        fn min(lhs: __m256i, rhs: __m256i) -> __m256i {
+            unsafe { _mm256_min_epu32(lhs, rhs) }
         }
 
         fn eq(lhs: __m256i, rhs: __m256i) -> u8 {
@@ -643,13 +717,20 @@ generate_simd_support! {
         }
     }
     impl trait ComparisonSimdOperation {
-        fn cmp(lhs: __m256, rhs: __m256) -> __m256 {
-            unsafe {
-                // transform all NaN into 1 and 0 into 0 by using: ((v as i32) * -1) as f32
-                let v = transmute(_mm256_cmp_ps::<_CMP_GT_OQ>(lhs, rhs));
-                let greater = transmute(_mm256_mul_epi32(v, _mm256_set1_epi32(-1)));
-                _mm256_add_ps(greater, _mm256_cmp_ps::<_CMP_LT_OQ>(lhs, rhs))
-            }
+        // fn cmp(lhs: __m256, rhs: __m256) -> __m256 {
+        //     unsafe {
+        //         // transform all NaN into 1 and 0 into 0 by using: ((v as i32) * -1) as f32
+        //         let v = transmute(_mm256_cmp_ps::<_CMP_GT_OQ>(lhs, rhs));
+        //         let greater = transmute(_mm256_mul_epi32(v, _mm256_set1_epi32(-1)));
+        //         _mm256_add_ps(greater, _mm256_cmp_ps::<_CMP_LT_OQ>(lhs, rhs))
+        //     }
+        // }
+
+        fn max(lhs: __m256, rhs: __m256) -> __m256 {
+            unsafe { _mm256_max_ps(lhs, rhs) }
+        }
+        fn min(lhs: __m256, rhs: __m256) -> __m256 {
+            unsafe { _mm256_min_ps(lhs, rhs) }
         }
 
         fn eq(lhs: __m256, rhs: __m256) -> u8 {
@@ -743,5 +824,45 @@ unsafe fn _mm256_cmpgt_epu32(a: __m256i, b: __m256i) -> __m256i {
     _mm256_cmpgt_epi32(
         _mm256_add_epi32(a, _mm256_set1_epi32(i32::MIN)),
         _mm256_add_epi32(b, _mm256_set1_epi32(i32::MIN)),
+    )
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn _mm_max_epu32(a: __m128i, b: __m128i) -> __m128i {
+    let xmm0 = _mm_set1_epi32(i32::MIN);
+    _mm_sub_epi32(
+        _mm_max_epi32(_mm_add_epi32(a, xmm0), _mm_add_epi32(b, xmm0)),
+        xmm0,
+    )
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn _mm256_max_epu32(a: __m256i, b: __m256i) -> __m256i {
+    let xmm0 = _mm256_set1_epi32(i32::MIN);
+    _mm256_sub_epi32(
+        _mm256_max_epi32(_mm256_add_epi32(a, xmm0), _mm256_add_epi32(b, xmm0)),
+        xmm0,
+    )
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn _mm_min_epu32(a: __m128i, b: __m128i) -> __m128i {
+    let xmm0 = _mm_set1_epi32(i32::MIN);
+    _mm_sub_epi32(
+        _mm_min_epi32(_mm_add_epi32(a, xmm0), _mm_add_epi32(b, xmm0)),
+        xmm0,
+    )
+}
+
+#[inline]
+#[allow(unsafe_op_in_unsafe_fn)]
+unsafe fn _mm256_min_epu32(a: __m256i, b: __m256i) -> __m256i {
+    let xmm0 = _mm256_set1_epi32(i32::MIN);
+    _mm256_sub_epi32(
+        _mm256_min_epi32(_mm256_add_epi32(a, xmm0), _mm256_add_epi32(b, xmm0)),
+        xmm0,
     )
 }

@@ -1,9 +1,10 @@
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
-use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Not, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Sub};
 use std::ptr::copy_nonoverlapping;
 
+use boundaries::markers::MaskElement;
 use boundaries::{ArithmeticSimdOperation, CheckIntOverflowSimd, ComparisonSimdOperation};
 use macros::generate_simd_support;
 
@@ -27,6 +28,20 @@ impl<T, const N: usize> Simd<T, N>
 where
     LaneCount<T, N>: SupportedNativeSimd<T, N>,
 {
+    /// Converts an array to a SIMD vector.
+    #[inline]
+    pub fn splat(value: T) -> Self
+    where
+        T: Copy,
+    {
+        // SAFETY: `&[value; N]` is safe to read.
+        unsafe {
+            Self(<LaneCount<T, N> as SupportedNativeSimd<T, N>>::load(
+                &[value; N],
+            ))
+        }
+    }
+
     /// Converts an array to a SIMD vector.
     #[inline]
     pub fn from_array(array: [T; N]) -> Self {
@@ -53,7 +68,9 @@ where
         <LaneCount<T, N> as SupportedNativeSimd<T, N>>::as_inner_ref(&self.0).as_ref()
     }
 
-    pub fn partial_eq(self, rhs: Self) -> Simd<bool, N>
+    /// Perform `==` operation on each element of 2 vectors.
+    #[inline]
+    pub fn partial_eq(&self, rhs: &Self) -> Simd<bool, N>
     where
         LaneCount<T, N>: ComparisonSimdOperation<T, N>,
         LaneCount<bool, N>: SupportedNativeSimd<
@@ -67,7 +84,25 @@ where
         ))
     }
 
-    pub fn partial_gt(self, rhs: Self) -> Simd<bool, N>
+    /// Perform `!=` operation on each element of 2 vectors.
+    #[inline]
+    pub fn partial_ne(&self, rhs: &Self) -> Simd<bool, N>
+    where
+        LaneCount<T, N>: ComparisonSimdOperation<T, N>,
+        LaneCount<bool, N>: SupportedNativeSimd<
+                bool,
+                N,
+                SimdType = <LaneCount<T, N> as SupportedNativeSimd<T, N>>::Mask,
+            >,
+    {
+        Simd(!<LaneCount<T, N> as ComparisonSimdOperation<T, N>>::eq(
+            self.0, rhs.0,
+        ))
+    }
+
+    /// Perform `>` operation on each element of 2 vectors.
+    #[inline]
+    pub fn partial_gt(&self, rhs: &Self) -> Simd<bool, N>
     where
         LaneCount<T, N>: ComparisonSimdOperation<T, N>,
         LaneCount<bool, N>: SupportedNativeSimd<
@@ -81,7 +116,9 @@ where
         ))
     }
 
-    pub fn partial_lt(self, rhs: Self) -> Simd<bool, N>
+    /// Perform `<` operation on each element of 2 vectors.
+    #[inline]
+    pub fn partial_lt(&self, rhs: &Self) -> Simd<bool, N>
     where
         LaneCount<T, N>: ComparisonSimdOperation<T, N>,
         LaneCount<bool, N>: SupportedNativeSimd<
@@ -90,9 +127,43 @@ where
                 SimdType = <LaneCount<T, N> as SupportedNativeSimd<T, N>>::Mask,
             >,
     {
-        Simd(<LaneCount<T, N> as ComparisonSimdOperation<T, N>>::eq(
+        Simd(<LaneCount<T, N> as ComparisonSimdOperation<T, N>>::lt(
             self.0, rhs.0,
         ))
+    }
+
+    /// Compare each elements of 2 vectors and return the max of each comparison,
+    /// in the case of a f32, it case the same behaviors has [`f32::max`].
+    #[inline]
+    pub fn max(self, rhs: Self) -> Simd<T, N>
+    where
+        LaneCount<T, N>: ComparisonSimdOperation<T, N>,
+    {
+        Simd(<LaneCount<T, N> as ComparisonSimdOperation<T, N>>::max(
+            self.0, rhs.0,
+        ))
+    }
+
+    /// Compare each elements of 2 vectors and return the min of each comparison,
+    /// in the case of a f32, it case the same behaviors has [`f32::max`].
+    #[inline]
+    pub fn min(self, rhs: Self) -> Simd<T, N>
+    where
+        LaneCount<T, N>: ComparisonSimdOperation<T, N>,
+    {
+        Simd(<LaneCount<T, N> as ComparisonSimdOperation<T, N>>::min(
+            self.0, rhs.0,
+        ))
+    }
+
+    /// Restrait the value of self between all value of each element of the
+    /// min and max vectors.
+    #[inline]
+    pub fn clamp(self, min: Self, max: Self) -> Simd<T, N>
+    where
+        LaneCount<T, N>: ComparisonSimdOperation<T, N>,
+    {
+        self.min(max).max(min)
     }
 
     /// Calculates `self + rhs`.
@@ -266,6 +337,18 @@ where
     }
 }
 
+impl<T, const N: usize> PartialEq for Simd<T, N>
+where
+    LaneCount<T, N>: ComparisonSimdOperation<T, N>,
+{
+    fn eq(&self, other: &Self) -> bool {
+        <LaneCount<T, N> as ComparisonSimdOperation<T, N>>::eq(self.0, other.0)
+            == <LaneCount<T, N> as SupportedNativeSimd<T, N>>::Mask::FULL_MASK
+    }
+}
+
+impl<T, const N: usize> Eq for Simd<T, N> where LaneCount<T, N>: ComparisonSimdOperation<T, N> {}
+
 impl<T, const N: usize> Add for Simd<T, N>
 where
     LaneCount<T, N>: ArithmeticSimdOperation<T, N>,
@@ -356,7 +439,7 @@ pub(crate) trait SupportedNativeSimd<T, const N: usize>: Sized {
     type SimdType: Copy;
 
     /// Represent the type of the mask when the simd type is cast to a bool
-    type Mask: Copy + BitAnd + BitOr + BitXor + Not;
+    type Mask: MaskElement<N> + Copy;
 
     /// Represent the ref of the simd array
     type InnerRef: Debug + ?Sized;
@@ -471,9 +554,7 @@ generate_simd_support! {
     type InnerRef = u8;
     type Mask = u8;
     impl base {
-        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 {
-            value
-        }
+        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
     }
 }
 generate_simd_support! {
@@ -481,9 +562,7 @@ generate_simd_support! {
     type InnerRef = u8;
     type Mask = u8;
     impl base {
-        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 {
-            value
-        }
+        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
     }
 }
 generate_simd_support! {
@@ -491,9 +570,7 @@ generate_simd_support! {
     type InnerRef = u8;
     type Mask = u8;
     impl base {
-        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 {
-            value
-        }
+        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
     }
 }
 generate_simd_support! {
@@ -501,8 +578,6 @@ generate_simd_support! {
     type InnerRef = u8;
     type Mask = u8;
     impl base {
-        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 {
-            value
-        }
+        fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
     }
 }
