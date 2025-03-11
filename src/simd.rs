@@ -1,12 +1,13 @@
 use std::fmt::Debug;
-use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Mul, Sub};
 use std::ptr::copy_nonoverlapping;
 
-use boundaries::markers::MaskElement;
+use boundaries::MaskElement;
 use boundaries::{ArithmeticSimdOperation, CheckIntOverflowSimd, ComparisonSimdOperation};
 use macros::generate_simd_support;
+
+use crate::markers::Sealed;
 
 #[cfg(target_arch = "aarch64")]
 mod aarch64;
@@ -19,34 +20,27 @@ mod macros;
 #[allow(private_bounds)]
 #[derive(Copy, Clone)]
 #[repr(transparent)]
-pub struct Simd<T, const N: usize>(<LaneCount<T, N> as SupportedNativeSimd<N>>::SimdType)
+pub struct Simd<T, const N: usize>(T::NativeType)
 where
-    LaneCount<T, N>: SupportedNativeSimd<N>;
+    T: SimdElement<N>;
 
 #[allow(private_bounds)]
 impl<T, const N: usize> Simd<T, N>
 where
-    LaneCount<T, N>: SupportedNativeSimd<N>,
+    T: SimdElement<N>,
 {
     /// Converts an array to a SIMD vector.
     #[inline]
-    pub fn splat(value: T) -> Self
-    where
-        T: Copy,
-    {
+    pub fn splat(value: T) -> Self {
         // SAFETY: `&[value; N]` is safe to read.
-        unsafe {
-            Self(<LaneCount<T, N> as SupportedNativeSimd<N>>::load(
-                &[value; N],
-            ))
-        }
+        unsafe { Self(T::load(&[value; N])) }
     }
 
     /// Converts an array to a SIMD vector.
     #[inline]
     pub fn from_array(array: [T; N]) -> Self {
         // SAFETY: `&array` is safe to read.
-        unsafe { Self(<LaneCount<T, N> as SupportedNativeSimd<N>>::load(&array)) }
+        unsafe { Self(T::load(&array)) }
     }
 
     /// Converts a SIMD vector to an array.
@@ -54,7 +48,7 @@ where
     pub fn to_array(self) -> [T; N] {
         let mut tmp = MaybeUninit::<[T; N]>::uninit();
         unsafe {
-            <LaneCount<T, N> as SupportedNativeSimd<N>>::store(tmp.as_mut_ptr(), self.0);
+            T::store(tmp.as_mut_ptr(), self.0);
             tmp.assume_init()
         }
     }
@@ -63,69 +57,49 @@ where
     #[inline]
     pub fn as_array(&self) -> &[T]
     where
-        <LaneCount<T, N> as SupportedNativeSimd<N>>::InnerRef: AsRef<[T]>,
+        T::InnerRef: AsRef<[T]>,
     {
-        <LaneCount<T, N> as SupportedNativeSimd<N>>::as_inner_ref(&self.0).as_ref()
+        T::as_inner_ref(&self.0).as_ref()
     }
 
     /// Perform `==` operation on each element of 2 vectors.
     #[inline]
     pub fn partial_eq(&self, rhs: &Self) -> Simd<bool, N>
     where
-        LaneCount<T, N>: ComparisonSimdOperation<N>,
-        LaneCount<bool, N>: SupportedNativeSimd<
-                N,
-                SimdType = <LaneCount<T, N> as SupportedNativeSimd<N>>::Mask,
-            >,
+        T: ComparisonSimdOperation<N>,
+        bool: SimdElement<N, NativeType = T::Mask>,
     {
-        Simd(<LaneCount<T, N> as ComparisonSimdOperation<N>>::eq(
-            self.0, rhs.0,
-        ))
+        Simd(T::eq(self.0, rhs.0))
     }
 
     /// Perform `!=` operation on each element of 2 vectors.
     #[inline]
     pub fn partial_ne(&self, rhs: &Self) -> Simd<bool, N>
     where
-        LaneCount<T, N>: ComparisonSimdOperation<N>,
-        LaneCount<bool, N>: SupportedNativeSimd<
-                N,
-                SimdType = <LaneCount<T, N> as SupportedNativeSimd<N>>::Mask,
-            >,
+        T: ComparisonSimdOperation<N>,
+        bool: SimdElement<N, NativeType = T::Mask>,
     {
-        Simd(!<LaneCount<T, N> as ComparisonSimdOperation<N>>::eq(
-            self.0, rhs.0,
-        ))
+        Simd(!T::eq(self.0, rhs.0))
     }
 
     /// Perform `>` operation on each element of 2 vectors.
     #[inline]
     pub fn partial_gt(&self, rhs: &Self) -> Simd<bool, N>
     where
-        LaneCount<T, N>: ComparisonSimdOperation<N>,
-        LaneCount<bool, N>: SupportedNativeSimd<
-                N,
-                SimdType = <LaneCount<T, N> as SupportedNativeSimd<N>>::Mask,
-            >,
+        T: ComparisonSimdOperation<N>,
+        bool: SimdElement<N, NativeType = T::Mask>,
     {
-        Simd(<LaneCount<T, N> as ComparisonSimdOperation<N>>::gt(
-            self.0, rhs.0,
-        ))
+        Simd(T::gt(self.0, rhs.0))
     }
 
     /// Perform `<` operation on each element of 2 vectors.
     #[inline]
     pub fn partial_lt(&self, rhs: &Self) -> Simd<bool, N>
     where
-        LaneCount<T, N>: ComparisonSimdOperation<N>,
-        LaneCount<bool, N>: SupportedNativeSimd<
-                N,
-                SimdType = <LaneCount<T, N> as SupportedNativeSimd<N>>::Mask,
-            >,
+        T: ComparisonSimdOperation<N>,
+        bool: SimdElement<N, NativeType = T::Mask>,
     {
-        Simd(<LaneCount<T, N> as ComparisonSimdOperation<N>>::lt(
-            self.0, rhs.0,
-        ))
+        Simd(T::lt(self.0, rhs.0))
     }
 
     /// Compare each elements of 2 vectors and return the max of each comparison,
@@ -133,11 +107,9 @@ where
     #[inline]
     pub fn max(self, rhs: Self) -> Simd<T, N>
     where
-        LaneCount<T, N>: ComparisonSimdOperation<N>,
+        T: ComparisonSimdOperation<N>,
     {
-        Simd(<LaneCount<T, N> as ComparisonSimdOperation<N>>::max(
-            self.0, rhs.0,
-        ))
+        Simd(T::max(self.0, rhs.0))
     }
 
     /// Compare each elements of 2 vectors and return the min of each comparison,
@@ -145,11 +117,9 @@ where
     #[inline]
     pub fn min(self, rhs: Self) -> Simd<T, N>
     where
-        LaneCount<T, N>: ComparisonSimdOperation<N>,
+        T: ComparisonSimdOperation<N>,
     {
-        Simd(<LaneCount<T, N> as ComparisonSimdOperation<N>>::min(
-            self.0, rhs.0,
-        ))
+        Simd(T::min(self.0, rhs.0))
     }
 
     /// Restrait the value of self between all value of each element of the
@@ -157,7 +127,7 @@ where
     #[inline]
     pub fn clamp(self, min: Self, max: Self) -> Simd<T, N>
     where
-        LaneCount<T, N>: ComparisonSimdOperation<N>,
+        T: ComparisonSimdOperation<N>,
     {
         self.min(max).max(min)
     }
@@ -170,10 +140,9 @@ where
     #[inline]
     pub fn overflowing_add(self, rhs: Self) -> (Self, bool)
     where
-        LaneCount<T, N>: CheckIntOverflowSimd<N>,
+        T: CheckIntOverflowSimd<N>,
     {
-        let (sum, overflow) =
-            <LaneCount<T, N> as CheckIntOverflowSimd<N>>::overflowing_add(self.0, rhs.0);
+        let (sum, overflow) = T::overflowing_add(self.0, rhs.0);
         (Self(sum), overflow)
     }
 
@@ -182,9 +151,9 @@ where
     #[inline]
     pub fn wrapping_add(self, rhs: Self) -> Self
     where
-        LaneCount<T, N>: CheckIntOverflowSimd<N>,
+        T: CheckIntOverflowSimd<N>,
     {
-        Self(<LaneCount<T, N> as CheckIntOverflowSimd<N>>::wrapping_add(self.0, rhs.0))
+        Self(T::wrapping_add(self.0, rhs.0))
     }
 
     /// Unchecked addition. Computes `self + rhs`, assuming overflow cannot occur.
@@ -199,20 +168,18 @@ where
     #[inline]
     pub unsafe fn unchecked_add(self, rhs: Self) -> Self
     where
-        LaneCount<T, N>: CheckIntOverflowSimd<N>,
+        T: CheckIntOverflowSimd<N>,
     {
-        Self(unsafe {
-            <LaneCount<T, N> as CheckIntOverflowSimd<N>>::unchecked_add(self.0, rhs.0)
-        })
+        Self(unsafe { T::unchecked_add(self.0, rhs.0) })
     }
 
     /// Checked addition. Computes `self + rhs`, returning None if overflow occurred.
     #[inline]
     pub fn checked_add(self, rhs: Self) -> Option<Self>
     where
-        LaneCount<T, N>: CheckIntOverflowSimd<N>,
+        T: CheckIntOverflowSimd<N>,
     {
-        <LaneCount<T, N> as CheckIntOverflowSimd<N>>::checked_add(self.0, rhs.0).map(Self)
+        T::checked_add(self.0, rhs.0).map(Self)
     }
 
     /// Calculates `lhs - rhs`.
@@ -222,10 +189,9 @@ where
     /// then the wrapped value is returned.
     pub fn overflowing_sub(self, rhs: Self) -> (Self, bool)
     where
-        LaneCount<T, N>: CheckIntOverflowSimd<N>,
+        T: CheckIntOverflowSimd<N>,
     {
-        let (sum, overflow) =
-            <LaneCount<T, N> as CheckIntOverflowSimd<N>>::overflowing_sub(self.0, rhs.0);
+        let (sum, overflow) = T::overflowing_sub(self.0, rhs.0);
         (Self(sum), overflow)
     }
 
@@ -233,9 +199,9 @@ where
     /// the boundary of the type.
     pub fn wrapping_sub(self, rhs: Self) -> Self
     where
-        LaneCount<T, N>: CheckIntOverflowSimd<N>,
+        T: CheckIntOverflowSimd<N>,
     {
-        Self(<LaneCount<T, N> as CheckIntOverflowSimd<N>>::wrapping_sub(self.0, rhs.0))
+        Self(T::wrapping_sub(self.0, rhs.0))
     }
 
     /// Unchecked subtraction. Computes `lhs - rhs`, assuming overflow cannot occur.
@@ -253,20 +219,18 @@ where
     #[inline]
     pub unsafe fn unchecked_sub(self, rhs: Self) -> Self
     where
-        LaneCount<T, N>: CheckIntOverflowSimd<N>,
+        T: CheckIntOverflowSimd<N>,
     {
-        Self(unsafe {
-            <LaneCount<T, N> as CheckIntOverflowSimd<N>>::unchecked_sub(self.0, rhs.0)
-        })
+        Self(unsafe { T::unchecked_sub(self.0, rhs.0) })
     }
 
     /// Checked subtraction. Computes `lhs - rhs`, returning None if overflow occurred.
     #[inline]
     pub fn checked_sub(self, rhs: Self) -> Option<Self>
     where
-        LaneCount<T, N>: CheckIntOverflowSimd<N>,
+        T: CheckIntOverflowSimd<N>,
     {
-        <LaneCount<T, N> as CheckIntOverflowSimd<N>>::checked_sub(self.0, rhs.0).map(Self)
+        T::checked_sub(self.0, rhs.0).map(Self)
     }
 
     /// Calculates `lhs * rhs`.
@@ -276,10 +240,9 @@ where
     /// then the wrapped value is returned.
     pub fn overflowing_mul(self, rhs: Self) -> (Self, bool)
     where
-        LaneCount<T, N>: CheckIntOverflowSimd<N>,
+        T: CheckIntOverflowSimd<N>,
     {
-        let (sum, overflow) =
-            <LaneCount<T, N> as CheckIntOverflowSimd<N>>::overflowing_mul(self.0, rhs.0);
+        let (sum, overflow) = T::overflowing_mul(self.0, rhs.0);
         (Self(sum), overflow)
     }
 
@@ -287,9 +250,9 @@ where
     /// the boundary of the type.
     pub fn wrapping_mul(self, rhs: Self) -> Self
     where
-        LaneCount<T, N>: CheckIntOverflowSimd<N>,
+        T: CheckIntOverflowSimd<N>,
     {
-        Self(<LaneCount<T, N> as CheckIntOverflowSimd<N>>::wrapping_mul(self.0, rhs.0))
+        Self(T::wrapping_mul(self.0, rhs.0))
     }
 
     /// Unchecked multiplication. Computes `lhs * rhs`, assuming overflow cannot occur.
@@ -307,91 +270,81 @@ where
     #[inline]
     pub unsafe fn unchecked_mul(self, rhs: Self) -> Self
     where
-        LaneCount<T, N>: CheckIntOverflowSimd<N>,
+        T: CheckIntOverflowSimd<N>,
     {
-        Self(unsafe {
-            <LaneCount<T, N> as CheckIntOverflowSimd<N>>::unchecked_mul(self.0, rhs.0)
-        })
+        Self(unsafe { T::unchecked_mul(self.0, rhs.0) })
     }
 
     /// Checked multiplication. Computes `lhs * rhs`, returning None if overflow occurred.
     #[inline]
     pub fn checked_mul(self, rhs: Self) -> Option<Self>
     where
-        LaneCount<T, N>: CheckIntOverflowSimd<N>,
+        T: CheckIntOverflowSimd<N>,
     {
-        <LaneCount<T, N> as CheckIntOverflowSimd<N>>::checked_mul(self.0, rhs.0).map(Self)
+        T::checked_mul(self.0, rhs.0).map(Self)
     }
 }
 
 impl<T: Debug, const N: usize> Debug for Simd<T, N>
 where
-    LaneCount<T, N>: SupportedNativeSimd<N>,
+    T: SimdElement<N>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        <LaneCount<T, N> as SupportedNativeSimd<N>>::as_inner_ref(&self.0).fmt(f)
+        T::as_inner_ref(&self.0).fmt(f)
     }
 }
 
 impl<T, const N: usize> PartialEq for Simd<T, N>
 where
-    LaneCount<T, N>: ComparisonSimdOperation<N>,
+    T: ComparisonSimdOperation<N>,
 {
     fn eq(&self, other: &Self) -> bool {
-        <LaneCount<T, N> as ComparisonSimdOperation<N>>::eq(self.0, other.0)
-            == <LaneCount<T, N> as SupportedNativeSimd<N>>::Mask::FULL_MASK
+        T::eq(self.0, other.0) == T::Mask::FULL_MASK
     }
 }
 
-impl<T, const N: usize> Eq for Simd<T, N> where LaneCount<T, N>: ComparisonSimdOperation<N> {}
+impl<T, const N: usize> Eq for Simd<T, N> where T: ComparisonSimdOperation<N> {}
 
 impl<T, const N: usize> Add for Simd<T, N>
 where
-    LaneCount<T, N>: ArithmeticSimdOperation<N>,
+    T: ArithmeticSimdOperation<N>,
 {
     type Output = Self;
 
     #[inline]
     fn add(self, rhs: Self) -> Self::Output {
-        Self(<LaneCount<T, N> as ArithmeticSimdOperation<N>>::add(
-            self.0, rhs.0,
-        ))
+        Self(T::add(self.0, rhs.0))
     }
 }
 
 impl<T, const N: usize> Sub for Simd<T, N>
 where
-    LaneCount<T, N>: ArithmeticSimdOperation<N>,
+    T: ArithmeticSimdOperation<N>,
 {
     type Output = Self;
 
     #[inline]
     fn sub(self, rhs: Self) -> Self::Output {
-        Self(<LaneCount<T, N> as ArithmeticSimdOperation<N>>::sub(
-            self.0, rhs.0,
-        ))
+        Self(T::sub(self.0, rhs.0))
     }
 }
 
 impl<T, const N: usize> Mul for Simd<T, N>
 where
-    LaneCount<T, N>: ArithmeticSimdOperation<N>,
+    T: ArithmeticSimdOperation<N>,
 {
     type Output = Self;
 
     #[inline]
     fn mul(self, rhs: Self) -> Self::Output {
-        Self(<LaneCount<T, N> as ArithmeticSimdOperation<N>>::mul(
-            self.0, rhs.0,
-        ))
+        Self(T::mul(self.0, rhs.0))
     }
 }
 
 impl<const N: usize> BitAnd for Simd<bool, N>
 where
-    LaneCount<bool, N>: SupportedNativeSimd<N>,
-    <LaneCount<bool, N> as SupportedNativeSimd<N>>::SimdType:
-        BitAnd<Output = <LaneCount<bool, N> as SupportedNativeSimd<N>>::SimdType>,
+    bool: SimdElement<N>,
+    <bool as SimdElement<N>>::NativeType: BitAnd<Output = <bool as SimdElement<N>>::NativeType>,
 {
     type Output = Simd<bool, N>;
 
@@ -402,9 +355,8 @@ where
 
 impl<const N: usize> BitOr for Simd<bool, N>
 where
-    LaneCount<bool, N>: SupportedNativeSimd<N>,
-    <LaneCount<bool, N> as SupportedNativeSimd<N>>::SimdType:
-        BitOr<Output = <LaneCount<bool, N> as SupportedNativeSimd<N>>::SimdType>,
+    bool: SimdElement<N>,
+    <bool as SimdElement<N>>::NativeType: BitOr<Output = <bool as SimdElement<N>>::NativeType>,
 {
     type Output = Simd<bool, N>;
 
@@ -415,9 +367,8 @@ where
 
 impl<const N: usize> BitXor for Simd<bool, N>
 where
-    LaneCount<bool, N>: SupportedNativeSimd<N>,
-    <LaneCount<bool, N> as SupportedNativeSimd<N>>::SimdType:
-        BitXor<Output = <LaneCount<bool, N> as SupportedNativeSimd<N>>::SimdType>,
+    bool: SimdElement<N>,
+    <bool as SimdElement<N>>::NativeType: BitXor<Output = <bool as SimdElement<N>>::NativeType>,
 {
     type Output = Simd<bool, N>;
 
@@ -426,13 +377,10 @@ where
     }
 }
 
-/// Specifies the number of lanes in a SIMD vector as a type.
-pub(crate) struct LaneCount<T, const N: usize>(PhantomData<T>);
-
 /// Trait used as a marker to force the user
-pub(crate) trait SupportedNativeSimd<const N: usize>: Sized {
+pub unsafe trait SimdElement<const N: usize>: Sealed + Copy {
     /// Represent the native simd type used internally
-    type SimdType: Copy;
+    type NativeType: Copy;
 
     /// Represent the type of the mask when the simd type is cast to a bool
     type Mask: MaskElement<N> + Copy;
@@ -441,20 +389,20 @@ pub(crate) trait SupportedNativeSimd<const N: usize>: Sized {
     type InnerRef: Debug + ?Sized;
 
     /// Returns an array reference containing the entire SIMD vector.
-    fn as_inner_ref<'a>(value: &'a Self::SimdType) -> &'a Self::InnerRef;
+    fn as_inner_ref<'a>(value: &'a Self::NativeType) -> &'a Self::InnerRef;
 
     /// Store a vector into an array of `T`.
     ///
     /// # Safety
     ///
     /// Writing `mem_addr` must be safe, as if by [`std::ptr::write`].
-    unsafe fn store<T>(mem_addr: *mut [T; N], value: Self::SimdType) {
+    unsafe fn store<T>(mem_addr: *mut [T; N], value: Self::NativeType) {
         // SAFETY: the safety contract for `store` must be upheld by the caller
         unsafe {
             copy_nonoverlapping(
                 (&raw const value) as *const u8,
                 mem_addr as *mut u8,
-                size_of::<Self::SimdType>(),
+                size_of::<Self::NativeType>(),
             );
         }
     }
@@ -464,16 +412,16 @@ pub(crate) trait SupportedNativeSimd<const N: usize>: Sized {
     /// # Safety
     ///
     /// Reading `mem_addr` must be safe, as if by [`std::ptr::read`].
-    unsafe fn load<T>(mem_addr: *const [T; N]) -> Self::SimdType {
+    unsafe fn load<T>(mem_addr: *const [T; N]) -> Self::NativeType {
         // SAFETY: create a empty destination correctly aligned (like, for __m256
         // that require a alignement of 32)
-        let mut dst: Self::SimdType = unsafe { MaybeUninit::zeroed().assume_init() };
+        let mut dst: Self::NativeType = unsafe { MaybeUninit::zeroed().assume_init() };
         // SAFETY: the safety contract for `load` must be upheld by the caller
         unsafe {
             copy_nonoverlapping(
                 mem_addr as *const u8,
                 (&raw mut dst) as *mut u8,
-                size_of::<Self::SimdType>(),
+                size_of::<Self::NativeType>(),
             );
         }
         dst
@@ -577,3 +525,8 @@ generate_simd_support! {
         fn as_inner_ref<'a>(value: &'a u8) -> &'a u8 { value }
     }
 }
+
+impl Sealed for bool {}
+impl Sealed for u32 {}
+impl Sealed for i32 {}
+impl Sealed for f32 {}

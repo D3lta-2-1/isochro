@@ -11,15 +11,15 @@ macro_rules! generate_simd_support {
     ) => {
         generate_simd_support! { impl_native_simd$(($not_native))? $simd }
 
-        impl $crate::simd::SupportedNativeSimd<$n> for $crate::simd::LaneCount<$t, $n> {
-            type SimdType = $simd;
+        unsafe impl $crate::simd::SimdElement<$n> for $t {
+            type NativeType = $simd;
             $(type $ty_name = $ty_ty;)+
             $($(generate_simd_support! {
                 $(#[$attr])* $($modifier)+ $(<$($lifetime),*>)? ($($arg_name: $arg_ty),*) -> $return_ty $body
             })*)?
         }
 
-        $(impl $trait<$n> for $crate::simd::LaneCount<$t, $n> {
+        $(impl $trait<$n> for $t {
             $(generate_simd_support! {
                 $(#[$impl_attr])* $($impl_modifier)+ $(<$($impl_lifetime),*>)? ($($impl_arg_name: $impl_arg_ty),*) -> $impl_return_ty $impl_body
             })*
@@ -38,7 +38,7 @@ macro_rules! generate_simd_support {
         fn $caller$(<$($lifetime,)*>)?($($arg_name: $arg_ty),*) -> $return_ty $body
     };
     (impl_native_simd $simd:ty) => {
-        impl $crate::simd::boundaries::markers::NativeSimd for $simd {}
+        impl $crate::simd::boundaries::NativeSimd for $simd {}
     };
     (impl_native_simd(not_native) $simd:ty) => {};
 }
